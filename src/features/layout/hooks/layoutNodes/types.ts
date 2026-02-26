@@ -156,6 +156,7 @@ export type LayoutNodesOptions = {
   onPlanAccept?: () => void;
   onPlanSubmitChanges?: (changes: string) => void;
   onOpenSettings: () => void;
+  onOpenPluginSettings?: () => void;
   onOpenDictationSettings?: () => void;
   onOpenDebug: () => void;
   showDebugButton: boolean;
@@ -189,6 +190,7 @@ export type LayoutNodesOptions = {
   onWorkspaceDragEnter: (event: DragEvent<HTMLElement>) => void;
   onWorkspaceDragLeave: (event: DragEvent<HTMLElement>) => void;
   onWorkspaceDrop: (event: DragEvent<HTMLElement>) => void;
+  pluginStatusNode?: ReactNode;
   updaterState: UpdateState;
   onUpdate: () => void;
   onDismissUpdate: () => void;

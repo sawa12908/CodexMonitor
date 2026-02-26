@@ -1371,6 +1371,12 @@
   color: var(--text-subtle);
 }
 
+.sidebar-plugin-status {
+  color: var(--text-subtle);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
 .sidebar-account-menu {
   position: relative;
 }

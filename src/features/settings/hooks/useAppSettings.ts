@@ -142,6 +142,9 @@ function buildDefaultSettings(): AppSettings {
     remoteBackendToken: null,
     remoteBackends: [defaultRemote],
     activeRemoteBackendId: defaultRemote.id,
+    pluginsEnabled: true,
+    pluginDirs: [],
+    disabledPluginIds: [],
     keepDaemonRunningAfterAppClose: false,
     defaultAccessMode: "current",
     reviewDeliveryMode: "inline",
@@ -238,6 +241,16 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
   const chatHistoryScrollbackItems = normalizeChatHistoryScrollbackItems(
     settings.chatHistoryScrollbackItems,
   );
+  const pluginDirs = Array.isArray(settings.pluginDirs)
+    ? settings.pluginDirs
+        .map((value) => String(value ?? "").trim())
+        .filter((value) => value.length > 0)
+    : [];
+  const disabledPluginIds = Array.isArray(settings.disabledPluginIds)
+    ? settings.disabledPluginIds
+        .map((value) => String(value ?? "").trim())
+        .filter((value) => value.length > 0)
+    : [];
   return {
     ...settings,
     ...remoteBackendSettings,
@@ -270,6 +283,10 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
         : true,
     reviewDeliveryMode:
       settings.reviewDeliveryMode === "detached" ? "detached" : "inline",
+    pluginsEnabled:
+      typeof settings.pluginsEnabled === "boolean" ? settings.pluginsEnabled : true,
+    pluginDirs,
+    disabledPluginIds,
     chatHistoryScrollbackItems,
     commitMessagePrompt,
     openAppTargets: normalizedTargets,

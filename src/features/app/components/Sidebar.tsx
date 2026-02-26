@@ -10,6 +10,7 @@ import type {
 import { createPortal } from "react-dom";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent, RefObject } from "react";
+import type { ReactNode } from "react";
 import { FolderOpen } from "lucide-react";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
@@ -85,6 +86,7 @@ type SidebarProps = {
   onCancelSwitchAccount: () => void;
   accountSwitching: boolean;
   onOpenSettings: () => void;
+  onOpenPluginSettings?: () => void;
   onOpenDebug: () => void;
   showDebugButton: boolean;
   onAddWorkspace: () => void;
@@ -115,6 +117,7 @@ type SidebarProps = {
   onWorkspaceDragEnter: (event: React.DragEvent<HTMLElement>) => void;
   onWorkspaceDragLeave: (event: React.DragEvent<HTMLElement>) => void;
   onWorkspaceDrop: (event: React.DragEvent<HTMLElement>) => void;
+  pluginStatusNode?: ReactNode;
 };
 
 export const Sidebar = memo(function Sidebar({
@@ -146,6 +149,7 @@ export const Sidebar = memo(function Sidebar({
   onCancelSwitchAccount,
   accountSwitching,
   onOpenSettings,
+  onOpenPluginSettings,
   onOpenDebug,
   showDebugButton,
   onAddWorkspace,
@@ -176,6 +180,7 @@ export const Sidebar = memo(function Sidebar({
   onWorkspaceDragEnter,
   onWorkspaceDragLeave,
   onWorkspaceDrop,
+  pluginStatusNode,
 }: SidebarProps) {
   const [expandedWorkspaces, setExpandedWorkspaces] = useState(
     new Set<string>(),
@@ -1192,9 +1197,11 @@ export const Sidebar = memo(function Sidebar({
         weeklyResetLabel={weeklyResetLabel}
         creditsLabel={creditsLabel}
         showWeekly={showWeekly}
+        pluginStatusNode={pluginStatusNode}
       />
       <SidebarCornerActions
         onOpenSettings={onOpenSettings}
+        onOpenPluginSettings={onOpenPluginSettings}
         onOpenDebug={onOpenDebug}
         showDebugButton={showDebugButton}
         showAccountSwitcher={showAccountSwitcher}

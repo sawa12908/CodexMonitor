@@ -80,6 +80,10 @@ export function SettingsFeaturesSection({
   featureError,
   featuresLoading,
   featureUpdatingKey,
+  pluginsLoading,
+  pluginsError,
+  plugins,
+  onRefreshPlugins,
   stableFeatures,
   experimentalFeatures,
   hasDynamicFeatureRows,
@@ -158,6 +162,86 @@ export function SettingsFeaturesSection({
           <span className="settings-toggle-knob" />
         </button>
       </div>
+      <div className="settings-subsection-title">Plugins</div>
+      <div className="settings-subsection-subtitle">
+        Load local plugins from configured directories with isolated host controls.
+      </div>
+      <div className="settings-toggle-row">
+        <div>
+          <div className="settings-toggle-title">Enable plugin host</div>
+          <div className="settings-toggle-subtitle">
+            Keep this enabled to discover and activate plugins from plugin directories.
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`settings-toggle ${appSettings.pluginsEnabled ? "on" : ""}`}
+          onClick={() =>
+            void onUpdateAppSettings({
+              ...appSettings,
+              pluginsEnabled: !appSettings.pluginsEnabled,
+            })
+          }
+          aria-pressed={appSettings.pluginsEnabled}
+        >
+          <span className="settings-toggle-knob" />
+        </button>
+      </div>
+      <div className="settings-toggle-row">
+        <div>
+          <div className="settings-toggle-title">Plugin directories</div>
+          <div className="settings-toggle-subtitle">
+            {appSettings.pluginDirs.length > 0
+              ? appSettings.pluginDirs.join(", ")
+              : "No plugin directories configured."}
+          </div>
+        </div>
+        <button type="button" className="ghost" onClick={onRefreshPlugins}>
+          Refresh
+        </button>
+      </div>
+      {pluginsLoading && <div className="settings-help">Loading plugins...</div>}
+      {pluginsError && <div className="settings-help">{pluginsError}</div>}
+      {!pluginsLoading && !pluginsError && appSettings.pluginsEnabled && plugins.length === 0 && (
+        <div className="settings-help">No plugins discovered.</div>
+      )}
+      {!pluginsLoading &&
+        appSettings.pluginsEnabled &&
+        plugins.map((plugin) => (
+          <div className="settings-toggle-row" key={`${plugin.id}-${plugin.directory}`}>
+            <div>
+              <div className="settings-toggle-title">
+                {plugin.name} <code>{plugin.version}</code>
+              </div>
+              <div className="settings-toggle-subtitle">
+                {plugin.description?.trim() ||
+                  plugin.error ||
+                  (plugin.valid ? plugin.entryPath : "Plugin entry is missing.")}
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`settings-toggle ${plugin.enabled && plugin.valid ? "on" : ""}`}
+              onClick={() => {
+                const current = new Set(appSettings.disabledPluginIds);
+                if (plugin.enabled) {
+                  current.add(plugin.id);
+                } else {
+                  current.delete(plugin.id);
+                }
+                void onUpdateAppSettings({
+                  ...appSettings,
+                  disabledPluginIds: Array.from(current),
+                });
+              }}
+              aria-pressed={plugin.enabled && plugin.valid}
+              disabled={!plugin.valid}
+              title={plugin.valid ? undefined : "Plugin entry file is missing."}
+            >
+              <span className="settings-toggle-knob" />
+            </button>
+          </div>
+        ))}
       {stableFeatures.map((feature) => (
         <div className="settings-toggle-row" key={feature.name}>
           <div>

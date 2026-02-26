@@ -21,6 +21,7 @@ mod menu;
 #[path = "menu_mobile.rs"]
 mod menu;
 mod notifications;
+mod plugins;
 mod prompts;
 mod remote_backend;
 mod rules;
@@ -175,6 +176,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             settings::get_app_settings,
             settings::update_app_settings,
+            plugins::list_plugins,
+            plugins::plugin_data_read,
+            plugins::plugin_data_write,
+            plugins::plugin_entry_read,
             settings::get_codex_config_path,
             files::file_read,
             files::file_write,

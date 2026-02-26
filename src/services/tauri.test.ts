@@ -16,6 +16,10 @@ import {
   getGitLog,
   getGitStatus,
   getOpenAppIcon,
+  listPlugins,
+  pluginEntryRead,
+  pluginDataRead,
+  pluginDataWrite,
   listThreads,
   listMcpServerStatus,
   readGlobalAgentsMd,
@@ -369,6 +373,50 @@ describe("tauri invoke wrappers", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("get_open_app_icon", {
       appName: "Xcode",
+    });
+  });
+
+  it("invokes list_plugins", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce([]);
+
+    await listPlugins();
+
+    expect(invokeMock).toHaveBeenCalledWith("list_plugins");
+  });
+
+  it("maps plugin_entry_read", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ entryPath: "/plugins/demo/dist/index.js", content: "" });
+
+    await pluginEntryRead("demo-plugin", "/plugins/demo");
+
+    expect(invokeMock).toHaveBeenCalledWith("plugin_entry_read", {
+      pluginId: "demo-plugin",
+      directory: "/plugins/demo",
+    });
+  });
+
+  it("maps plugin_data_read", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ exists: false, content: "" });
+
+    await pluginDataRead("demo-plugin");
+
+    expect(invokeMock).toHaveBeenCalledWith("plugin_data_read", {
+      pluginId: "demo-plugin",
+    });
+  });
+
+  it("maps plugin_data_write", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await pluginDataWrite("demo-plugin", "{\"enabled\":true}");
+
+    expect(invokeMock).toHaveBeenCalledWith("plugin_data_write", {
+      pluginId: "demo-plugin",
+      content: "{\"enabled\":true}",
     });
   });
 

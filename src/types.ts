@@ -201,6 +201,28 @@ export type OpenAppTarget = {
   args: string[];
 };
 
+export type PluginManifest = {
+  id: string;
+  name: string;
+  version: string;
+  description?: string | null;
+  entry?: string | null;
+  permissions?: string[];
+};
+
+export type PluginDescriptor = {
+  id: string;
+  name: string;
+  version: string;
+  description?: string | null;
+  directory: string;
+  entry: string;
+  entryPath: string;
+  enabled: boolean;
+  valid: boolean;
+  error?: string | null;
+};
+
 export type AppSettings = {
   codexBin: string | null;
   codexArgs: string | null;
@@ -210,6 +232,9 @@ export type AppSettings = {
   remoteBackendToken: string | null;
   remoteBackends: RemoteBackendTarget[];
   activeRemoteBackendId: string | null;
+  pluginsEnabled: boolean;
+  pluginDirs: string[];
+  disabledPluginIds: string[];
   keepDaemonRunningAfterAppClose: boolean;
   defaultAccessMode: AccessMode;
   reviewDeliveryMode: "inline" | "detached";

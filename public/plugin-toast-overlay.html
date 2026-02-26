@@ -1,0 +1,100 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plugin Toast</title>
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: transparent;
+        font-family: "Segoe UI", "PingFang SC", sans-serif;
+      }
+
+      .toast-root {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+
+      .toast-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: fit-content;
+        max-width: calc(100vw - 12px);
+        padding: 13px 24px;
+        border-radius: 999px;
+        border: 1px solid rgba(142, 191, 255, 0.55);
+        background: linear-gradient(
+          160deg,
+          rgba(80, 146, 255, 0.98) 0%,
+          rgba(60, 123, 240, 0.98) 62%,
+          rgba(49, 104, 223, 0.98) 100%
+        );
+        box-shadow:
+          0 10px 22px rgba(48, 97, 199, 0.34),
+          inset 0 1px 0 rgba(255, 255, 255, 0.24);
+        color: #ffffff;
+        text-align: center;
+      }
+
+      .toast-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.92);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .toast-icon-mark {
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1;
+        transform: translateY(-1px);
+      }
+
+      .toast-text {
+        font-size: 16px;
+        font-weight: 700;
+        margin: 0;
+        line-height: 1.2;
+        white-space: nowrap;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toast-root">
+      <div class="toast-pill" role="status" aria-live="polite">
+        <span class="toast-icon" aria-hidden="true">
+          <span class="toast-icon-mark">i</span>
+        </span>
+        <p id="toast-text" class="toast-text">&#20219;&#21153;&#23436;&#25104;</p>
+      </div>
+    </div>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const fallbackMessage = "\u4efb\u52a1\u5b8c\u6210";
+      const fallbackTitle = "";
+      const title = (params.get("title") || fallbackTitle).trim();
+      const message = (params.get("message") || fallbackMessage).trim() || fallbackMessage;
+      const finalText = title ? `${title}: ${message}` : message;
+      const textEl = document.getElementById("toast-text");
+      if (textEl) {
+        textEl.textContent = finalText;
+      }
+    </script>
+  </body>
+</html>

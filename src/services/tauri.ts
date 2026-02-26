@@ -14,6 +14,7 @@ import type {
   WorkspaceInfo,
   AppMention,
   WorkspaceSettings,
+  PluginDescriptor,
 } from "../types";
 import type {
   GitFileDiff,
@@ -870,6 +871,35 @@ export async function tailscaleDaemonStop(): Promise<TcpDaemonStatus> {
 
 export async function tailscaleDaemonStatus(): Promise<TcpDaemonStatus> {
   return invoke<TcpDaemonStatus>("tailscale_daemon_status");
+}
+
+export async function listPlugins(): Promise<PluginDescriptor[]> {
+  return invoke<PluginDescriptor[]>("list_plugins");
+}
+
+export async function pluginEntryRead(
+  pluginId: string,
+  directory?: string | null,
+): Promise<{ entryPath: string; content: string }> {
+  return invoke<{ entryPath: string; content: string }>("plugin_entry_read", {
+    pluginId,
+    directory: directory ?? null,
+  });
+}
+
+export async function pluginDataRead(
+  pluginId: string,
+): Promise<{ exists: boolean; content: string }> {
+  return invoke<{ exists: boolean; content: string }>("plugin_data_read", {
+    pluginId,
+  });
+}
+
+export async function pluginDataWrite(
+  pluginId: string,
+  content: string,
+): Promise<void> {
+  return invoke("plugin_data_write", { pluginId, content });
 }
 
 type MenuAcceleratorUpdate = {

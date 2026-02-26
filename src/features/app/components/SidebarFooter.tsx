@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 type SidebarFooterProps = {
   sessionPercent: number | null;
   weeklyPercent: number | null;
@@ -5,6 +7,7 @@ type SidebarFooterProps = {
   weeklyResetLabel: string | null;
   creditsLabel: string | null;
   showWeekly: boolean;
+  pluginStatusNode?: ReactNode;
 };
 
 export function SidebarFooter({
@@ -14,6 +17,7 @@ export function SidebarFooter({
   weeklyResetLabel,
   creditsLabel,
   showWeekly,
+  pluginStatusNode,
 }: SidebarFooterProps) {
   return (
     <div className="sidebar-footer">
@@ -60,6 +64,7 @@ export function SidebarFooter({
         )}
       </div>
       {creditsLabel && <div className="usage-meta">{creditsLabel}</div>}
+      {pluginStatusNode}
     </div>
   );
 }

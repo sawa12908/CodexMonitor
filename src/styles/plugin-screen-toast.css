@@ -1,0 +1,35 @@
+.plugin-screen-toast-root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  background: transparent;
+  pointer-events: none;
+  -webkit-app-region: no-drag;
+}
+
+.plugin-screen-toast-card {
+  min-width: min(420px, calc(100vw - 20px));
+  max-width: min(620px, calc(100vw - 20px));
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-accent) 58%, var(--border-muted));
+  background: color-mix(in srgb, var(--surface-card) 88%, var(--surface-sidebar) 12%);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+.plugin-screen-toast-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  margin-bottom: 2px;
+}
+
+.plugin-screen-toast-message {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+}

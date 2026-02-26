@@ -40,6 +40,7 @@ export function playNotificationSound(
   url: string,
   label: SoundLabel,
   onDebug?: DebugLogger,
+  volumePercent = 100,
 ) {
   try {
     const ctx = getAudioContext();
@@ -55,7 +56,10 @@ export function playNotificationSound(
         const source = ctx.createBufferSource();
         const gainNode = ctx.createGain();
 
-        gainNode.gain.value = 0.05;
+        const normalizedVolume = Number.isFinite(volumePercent)
+          ? Math.max(0, Math.min(500, volumePercent))
+          : 100;
+        gainNode.gain.value = 2.0 * (normalizedVolume / 100);
         source.buffer = audioBuffer;
         source.connect(gainNode);
         gainNode.connect(ctx.destination);

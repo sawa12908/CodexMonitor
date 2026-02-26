@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import type { AppSettings, CodexFeature, CodexFeatureStage } from "@/types";
+import type {
+  AppSettings,
+  CodexFeature,
+  CodexFeatureStage,
+  PluginDescriptor,
+} from "@/types";
 import {
   getCodexConfigPath,
   getExperimentalFeatureList,
+  listPlugins,
   setCodexFeatureFlag,
 } from "@services/tauri";
 
@@ -26,6 +32,10 @@ export type SettingsFeaturesSectionProps = {
   featureError: string | null;
   featuresLoading: boolean;
   featureUpdatingKey: string | null;
+  pluginsLoading: boolean;
+  pluginsError: string | null;
+  plugins: PluginDescriptor[];
+  onRefreshPlugins: () => void;
   stableFeatures: CodexFeature[];
   experimentalFeatures: CodexFeature[];
   hasDynamicFeatureRows: boolean;
@@ -147,6 +157,9 @@ export const useSettingsFeaturesSection = ({
   const [featuresLoading, setFeaturesLoading] = useState(false);
   const [featureUpdatingKey, setFeatureUpdatingKey] = useState<string | null>(null);
   const [features, setFeatures] = useState<CodexFeature[]>([]);
+  const [pluginsLoading, setPluginsLoading] = useState(false);
+  const [pluginsError, setPluginsError] = useState<string | null>(null);
+  const [plugins, setPlugins] = useState<PluginDescriptor[]>([]);
 
   const handleOpenConfig = useCallback(async () => {
     setOpenConfigError(null);
@@ -224,6 +237,34 @@ export const useSettingsFeaturesSection = ({
     };
   }, [featureWorkspaceId]);
 
+  const loadPlugins = useCallback(() => {
+    void (async () => {
+      if (!appSettings.pluginsEnabled) {
+        setPlugins([]);
+        setPluginsLoading(false);
+        setPluginsError(null);
+        return;
+      }
+      setPluginsLoading(true);
+      setPluginsError(null);
+      try {
+        const loaded = await listPlugins();
+        setPlugins(loaded);
+      } catch (error) {
+        setPlugins([]);
+        setPluginsError(
+          error instanceof Error ? error.message : "Unable to load plugins.",
+        );
+      } finally {
+        setPluginsLoading(false);
+      }
+    })();
+  }, [appSettings.pluginsEnabled]);
+
+  useEffect(() => {
+    loadPlugins();
+  }, [loadPlugins]);
+
   const stableFeatures = useMemo(
     () =>
       features.filter(
@@ -289,6 +330,10 @@ export const useSettingsFeaturesSection = ({
     featureError,
     featuresLoading,
     featureUpdatingKey,
+    pluginsLoading,
+    pluginsError,
+    plugins,
+    onRefreshPlugins: loadPlugins,
     stableFeatures,
     experimentalFeatures,
     hasDynamicFeatureRows,

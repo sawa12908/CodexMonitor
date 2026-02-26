@@ -4,7 +4,7 @@
     {
       "identifier": "desktop-default",
       "description": "Capability for desktop windows",
-      "windows": ["main", "about"],
+      "windows": ["main", "about", "plugin-toast-overlay"],
       "platforms": ["macOS", "windows", "linux"],
       "permissions": [
         "core:default",
@@ -17,8 +17,15 @@
         "liquid-glass:default",
         "notification:default",
         "core:window:allow-close",
+        "core:window:allow-create",
+        "core:webview:allow-create-webview-window",
         "core:window:allow-is-maximized",
         "core:window:allow-minimize",
+        "core:window:allow-set-size",
+        "core:window:allow-set-position",
+        "core:window:allow-set-always-on-top",
+        "core:window:allow-set-skip-taskbar",
+        "core:window:allow-set-focusable",
         "core:window:allow-toggle-maximize",
         "core:window:allow-set-effects",
         "core:window:allow-start-dragging"

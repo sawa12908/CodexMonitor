@@ -82,7 +82,7 @@ use shared::process_core::kill_child_process_tree;
 use shared::prompts_core::{self, CustomPromptEntry};
 use shared::{
     agents_config_core, codex_aux_core, codex_core, files_core, git_core, git_ui_core,
-    local_usage_core, settings_core, workspaces_core, worktree_core,
+    local_usage_core, plugins_core, settings_core, workspaces_core, worktree_core,
 };
 use storage::{read_settings, read_workspaces};
 use types::{
@@ -1328,6 +1328,30 @@ impl DaemonState {
     async fn menu_set_accelerators(&self, _updates: Vec<Value>) -> Result<(), String> {
         // Daemon has no native menu runtime; treat as no-op for remote parity.
         Ok(())
+    }
+
+    async fn list_plugins(&self) -> Result<Vec<plugins_core::PluginDescriptor>, String> {
+        plugins_core::list_plugins_core(&self.app_settings).await
+    }
+
+    async fn plugin_data_read(
+        &self,
+        plugin_id: String,
+    ) -> Result<plugins_core::PluginDataResponse, String> {
+        plugins_core::plugin_data_read_core(&self.data_dir, &plugin_id)
+    }
+
+    async fn plugin_data_write(&self, plugin_id: String, content: String) -> Result<(), String> {
+        plugins_core::plugin_data_write_core(&self.data_dir, &plugin_id, &content)
+    }
+
+    async fn plugin_entry_read(
+        &self,
+        plugin_id: String,
+        directory: Option<String>,
+    ) -> Result<plugins_core::PluginEntryResponse, String> {
+        plugins_core::plugin_entry_read_core(&self.app_settings, &plugin_id, directory.as_deref())
+            .await
     }
 
     async fn is_macos_debug_build(&self) -> bool {

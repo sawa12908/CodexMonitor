@@ -32,7 +32,54 @@ pub(super) async fn try_handle(
                 state
                     .menu_set_accelerators(updates)
                     .await
+                .map(|_| json!({ "ok": true })),
+            )
+        }
+        "list_plugins" => Some(
+            state
+                .list_plugins()
+                .await
+                .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string())),
+        ),
+        "plugin_data_read" => {
+            let plugin_id = match parse_string(params, "pluginId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .plugin_data_read(plugin_id)
+                    .await
+                    .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string())),
+            )
+        }
+        "plugin_data_write" => {
+            let plugin_id = match parse_string(params, "pluginId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let content = match parse_string(params, "content") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .plugin_data_write(plugin_id, content)
+                    .await
                     .map(|_| json!({ "ok": true })),
+            )
+        }
+        "plugin_entry_read" => {
+            let plugin_id = match parse_string(params, "pluginId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let directory = parse_optional_string(params, "directory");
+            Some(
+                state
+                    .plugin_entry_read(plugin_id, directory)
+                    .await
+                    .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string())),
             )
         }
         "is_macos_debug_build" => {

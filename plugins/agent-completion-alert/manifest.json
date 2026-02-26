@@ -1,0 +1,8 @@
+{
+  "id": "agent-completion-alert",
+  "name": "Agent Completion Alert",
+  "version": "0.1.0",
+  "description": "Play a sound and show a bottom toast when an agent answer is completed.",
+  "entry": "dist/index.js",
+  "permissions": ["events:read", "notification:play", "toast:show"]
+}

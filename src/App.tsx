@@ -36,6 +36,9 @@ import "./styles/mobile-remote-workspace-modal.css";
 import "./styles/branch-switcher-modal.css";
 import "./styles/git-init-modal.css";
 import "./styles/settings.css";
+import "./styles/plugin-manager.css";
+import "./styles/plugin-toasts.css";
+import "./styles/plugin-screen-toast.css";
 import "./styles/compact-base.css";
 import "./styles/compact-phone.css";
 import "./styles/compact-tablet.css";
@@ -118,6 +121,8 @@ import { MobileServerSetupWizard } from "@/features/mobile/components/MobileServ
 import { useMobileServerSetup } from "@/features/mobile/hooks/useMobileServerSetup";
 import { useWorkspaceHome } from "@/features/workspaces/hooks/useWorkspaceHome";
 import { useWorkspaceAgentMd } from "@/features/workspaces/hooks/useWorkspaceAgentMd";
+import { usePlugins } from "@/features/plugins/hooks/usePlugins";
+import { usePluginRuntime } from "@/features/plugins/hooks/usePluginRuntime";
 import type {
   ComposerEditorSettings,
   WorkspaceInfo,
@@ -167,6 +172,18 @@ const AboutView = lazy(() =>
 const SettingsView = lazy(() =>
   import("@settings/components/SettingsView").then((module) => ({
     default: module.SettingsView,
+  })),
+);
+
+const PluginManagerPanel = lazy(() =>
+  import("@/features/plugins/components/PluginManagerPanel").then((module) => ({
+    default: module.PluginManagerPanel,
+  })),
+);
+
+const PluginScreenToastWindow = lazy(() =>
+  import("@/features/plugins/components/PluginScreenToastWindow").then((module) => ({
+    default: module.PluginScreenToastWindow,
   })),
 );
 
@@ -350,6 +367,7 @@ function MainApp() {
     openSettings,
     closeSettings,
   } = useSettingsModalState();
+  const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const workspaceHomeTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -395,6 +413,11 @@ function MainApp() {
   useEffect(() => {
     resetGitHubPanelState();
   }, [activeWorkspaceId, resetGitHubPanelState]);
+  useEffect(() => {
+    if (settingsOpen) {
+      setPluginManagerOpen(false);
+    }
+  }, [settingsOpen]);
   const { remote: gitRemoteUrl, refresh: refreshGitRemote } = useGitRemote(activeWorkspace);
   const {
     repos: gitRootCandidates,
@@ -1978,6 +2001,13 @@ function MainApp() {
     loadOlderThreadsForWorkspace,
     listThreadsForWorkspace,
   });
+  const handleSidebarOpenPluginSettings = useCallback(() => {
+    closeSettings();
+    setPluginManagerOpen(true);
+  }, [closeSettings]);
+  const handleClosePluginManager = useCallback(() => {
+    setPluginManagerOpen(false);
+  }, []);
 
   useArchiveShortcut({
     isEnabled: isThreadOpen,
@@ -2041,6 +2071,32 @@ function MainApp() {
     Boolean(activeWorkspace?.connected) &&
     appSettings.backendMode === "remote" &&
     remoteThreadConnectionState === "polling";
+  const {
+    plugins,
+    loading: pluginsLoading,
+    error: pluginsError,
+    enabledCount: enabledPluginCount,
+    refresh: refreshPlugins,
+  } = usePlugins({
+    enabled: appSettings.pluginsEnabled,
+    refreshKey: `${appSettings.pluginDirs.join("|")}::${appSettings.disabledPluginIds.join("|")}`,
+  });
+  const pluginStatusNode = appSettings.pluginsEnabled ? (
+    <div className="sidebar-plugin-status">
+      {pluginsLoading
+        ? "Plugins: loading..."
+        : pluginsError
+          ? "Plugins: error"
+          : `Plugins: ${enabledPluginCount}/${plugins.length}`}
+    </div>
+  ) : null;
+  usePluginRuntime({
+    enabled: appSettings.pluginsEnabled,
+    plugins,
+    successSoundUrl,
+    errorSoundUrl,
+    onDebug: addDebugEntry,
+  });
 
   const {
     sidebarNode,
@@ -2108,6 +2164,7 @@ function MainApp() {
     onPlanAccept: handlePlanAccept,
     onPlanSubmitChanges: handlePlanSubmitChanges,
     onOpenSettings: handleSidebarOpenSettings,
+    onOpenPluginSettings: handleSidebarOpenPluginSettings,
     onOpenDictationSettings: () => openSettings("dictation"),
     onOpenDebug: handleDebugClick,
     showDebugButton,
@@ -2494,6 +2551,7 @@ function MainApp() {
     onWorkspaceDragEnter: handleWorkspaceDragEnter,
     onWorkspaceDragLeave: handleWorkspaceDragLeave,
     onWorkspaceDrop: handleWorkspaceDrop,
+    pluginStatusNode,
     getThreadArgsBadge,
   });
 
@@ -2757,6 +2815,21 @@ function MainApp() {
           onRemoveDictationModel: dictationModel.remove,
         }}
       />
+      {pluginManagerOpen && (
+        <Suspense fallback={null}>
+          <PluginManagerPanel
+            onClose={handleClosePluginManager}
+            appSettings={appSettings}
+            plugins={plugins}
+            pluginsLoading={pluginsLoading}
+            pluginsError={pluginsError}
+            onRefreshPlugins={refreshPlugins}
+            onUpdateAppSettings={async (next) => {
+              await queueSaveSettings(next);
+            }}
+          />
+        </Suspense>
+      )}
       {showMobileSetupWizard && (
         <MobileServerSetupWizard {...mobileSetupWizardProps} />
       )}
@@ -2766,10 +2839,21 @@ function MainApp() {
 
 function App() {
   const windowLabel = useWindowLabel();
+  const isPluginToastWindow =
+    windowLabel === "plugin-toast-overlay" ||
+    (typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("plugin_toast") === "1");
   if (windowLabel === "about") {
     return (
       <Suspense fallback={null}>
         <AboutView />
+      </Suspense>
+    );
+  }
+  if (isPluginToastWindow) {
+    return (
+      <Suspense fallback={null}>
+        <PluginScreenToastWindow />
       </Suspense>
     );
   }

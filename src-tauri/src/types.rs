@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::env;
+use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct GitFileStatus {
@@ -391,6 +393,12 @@ pub(crate) struct AppSettings {
     pub(crate) remote_backends: Vec<RemoteBackendTarget>,
     #[serde(default, rename = "activeRemoteBackendId")]
     pub(crate) active_remote_backend_id: Option<String>,
+    #[serde(default = "default_plugins_enabled", rename = "pluginsEnabled")]
+    pub(crate) plugins_enabled: bool,
+    #[serde(default = "default_plugin_dirs", rename = "pluginDirs")]
+    pub(crate) plugin_dirs: Vec<String>,
+    #[serde(default = "default_disabled_plugin_ids", rename = "disabledPluginIds")]
+    pub(crate) disabled_plugin_ids: Vec<String>,
     #[serde(default, rename = "keepDaemonRunningAfterAppClose")]
     pub(crate) keep_daemon_running_after_app_close: bool,
     #[serde(default = "default_access_mode", rename = "defaultAccessMode")]
@@ -688,6 +696,50 @@ fn default_remote_backend_host() -> String {
 
 fn default_remote_backends() -> Vec<RemoteBackendTarget> {
     Vec::new()
+}
+
+fn default_plugins_enabled() -> bool {
+    true
+}
+
+fn default_disabled_plugin_ids() -> Vec<String> {
+    Vec::new()
+}
+
+fn resolve_home_dir() -> Option<PathBuf> {
+    if let Ok(value) = env::var("HOME") {
+        if !value.trim().is_empty() {
+            return Some(PathBuf::from(value));
+        }
+    }
+    if let Ok(value) = env::var("USERPROFILE") {
+        if !value.trim().is_empty() {
+            return Some(PathBuf::from(value));
+        }
+    }
+    None
+}
+
+fn resolve_default_codex_home() -> Option<PathBuf> {
+    if let Ok(value) = env::var("CODEX_HOME") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
+    }
+    resolve_home_dir().map(|home| home.join(".codex"))
+}
+
+fn default_plugin_dirs() -> Vec<String> {
+    let Some(codex_home) = resolve_default_codex_home() else {
+        return Vec::new();
+    };
+    vec![
+        codex_home
+            .join("codex-monitor-plugins")
+            .to_string_lossy()
+            .to_string(),
+    ]
 }
 
 fn default_ui_scale() -> f64 {
@@ -1118,6 +1170,9 @@ impl Default for AppSettings {
             remote_backend_token: None,
             remote_backends: default_remote_backends(),
             active_remote_backend_id: None,
+            plugins_enabled: default_plugins_enabled(),
+            plugin_dirs: default_plugin_dirs(),
+            disabled_plugin_ids: default_disabled_plugin_ids(),
             keep_daemon_running_after_app_close: false,
             default_access_mode: "current".to_string(),
             review_delivery_mode: default_review_delivery_mode(),

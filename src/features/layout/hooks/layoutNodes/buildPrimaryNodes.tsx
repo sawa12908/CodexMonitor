@@ -61,6 +61,7 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onCancelSwitchAccount={options.onCancelSwitchAccount}
       accountSwitching={options.accountSwitching}
       onOpenSettings={options.onOpenSettings}
+      onOpenPluginSettings={options.onOpenPluginSettings}
       onOpenDebug={options.onOpenDebug}
       showDebugButton={options.showDebugButton}
       onAddWorkspace={options.onAddWorkspace}
@@ -91,6 +92,7 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onWorkspaceDragEnter={options.onWorkspaceDragEnter}
       onWorkspaceDragLeave={options.onWorkspaceDragLeave}
       onWorkspaceDrop={options.onWorkspaceDrop}
+      pluginStatusNode={options.pluginStatusNode}
     />
   );
 

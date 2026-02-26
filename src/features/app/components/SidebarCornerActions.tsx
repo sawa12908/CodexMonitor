@@ -1,5 +1,6 @@
 import ScrollText from "lucide-react/dist/esm/icons/scroll-text";
 import Settings from "lucide-react/dist/esm/icons/settings";
+import Plug from "lucide-react/dist/esm/icons/plug";
 import User from "lucide-react/dist/esm/icons/user";
 import X from "lucide-react/dist/esm/icons/x";
 import { useEffect } from "react";
@@ -11,6 +12,7 @@ import { useMenuController } from "../hooks/useMenuController";
 
 type SidebarCornerActionsProps = {
   onOpenSettings: () => void;
+  onOpenPluginSettings?: () => void;
   onOpenDebug: () => void;
   showDebugButton: boolean;
   showAccountSwitcher: boolean;
@@ -25,6 +27,7 @@ type SidebarCornerActionsProps = {
 
 export function SidebarCornerActions({
   onOpenSettings,
+  onOpenPluginSettings,
   onOpenDebug,
   showDebugButton,
   showAccountSwitcher,
@@ -118,6 +121,17 @@ export function SidebarCornerActions({
           title="Debug log"
         >
           <ScrollText size={14} aria-hidden />
+        </button>
+      )}
+      {onOpenPluginSettings && (
+        <button
+          className="ghost sidebar-corner-button"
+          type="button"
+          onClick={onOpenPluginSettings}
+          aria-label="Open plugin manager"
+          title="Plugin manager"
+        >
+          <Plug size={14} aria-hidden />
         </button>
       )}
     </div>
