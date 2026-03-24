@@ -41,6 +41,7 @@ pub(crate) struct AppState {
     pub(crate) dictation: Mutex<DictationState>,
     pub(crate) codex_login_cancels: Mutex<HashMap<String, CodexLoginCancelState>>,
     pub(crate) tcp_daemon: Mutex<TcpDaemonRuntime>,
+    pub(crate) research: Mutex<crate::research::ResearchRuntime>,
 }
 
 impl AppState {
@@ -51,6 +52,7 @@ impl AppState {
             .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
         let storage_path = data_dir.join("workspaces.json");
         let settings_path = data_dir.join("settings.json");
+        let research_path = data_dir.join("research_runs.json");
         let workspaces = read_workspaces(&storage_path).unwrap_or_default();
         let app_settings = read_settings(&settings_path).unwrap_or_default();
         Self {
@@ -64,6 +66,7 @@ impl AppState {
             dictation: Mutex::new(DictationState::default()),
             codex_login_cancels: Mutex::new(HashMap::new()),
             tcp_daemon: Mutex::new(TcpDaemonRuntime::default()),
+            research: Mutex::new(crate::research::ResearchRuntime::load(research_path)),
         }
     }
 }

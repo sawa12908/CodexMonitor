@@ -21,6 +21,7 @@ use super::context::workspace_entry_for_id;
 const INDEX_SKIP_WORKTREE_FLAG: u16 = 0x4000;
 const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
 const MAX_TEXT_DIFF_BYTES: usize = 2 * 1024 * 1024;
+const MAX_STATUS_DIFF_STATS_FILES: usize = 200;
 
 fn encode_image_base64(data: &[u8]) -> Option<String> {
     if data.len() > MAX_IMAGE_BYTES {
@@ -336,130 +337,147 @@ pub(super) async fn get_git_status_inner(
     workspace_id: String,
 ) -> Result<Value, String> {
     let entry = workspace_entry_for_id(workspaces, &workspace_id).await?;
-    let repo_root = resolve_git_root(&entry)?;
-    let repo = Repository::open(&repo_root).map_err(|e| e.to_string())?;
+    tokio::task::spawn_blocking(move || {
+        let repo_root = resolve_git_root(&entry)?;
+        let repo = Repository::open(&repo_root).map_err(|e| e.to_string())?;
 
-    let branch_name = repo
-        .head()
-        .ok()
-        .and_then(|head| head.shorthand().map(|s| s.to_string()))
-        .unwrap_or_else(|| "unknown".to_string());
+        let branch_name = repo
+            .head()
+            .ok()
+            .and_then(|head| head.shorthand().map(|s| s.to_string()))
+            .unwrap_or_else(|| "unknown".to_string());
 
-    let mut status_options = StatusOptions::new();
-    status_options
-        .include_untracked(true)
-        .recurse_untracked_dirs(true)
-        .renames_head_to_index(true)
-        .renames_index_to_workdir(true)
-        .include_ignored(false);
+        let mut status_options = StatusOptions::new();
+        status_options
+            .include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .renames_head_to_index(true)
+            .renames_index_to_workdir(true)
+            .include_ignored(false);
 
-    let statuses = repo
-        .statuses(Some(&mut status_options))
-        .map_err(|e| e.to_string())?;
-    let status_paths: Vec<PathBuf> = statuses
-        .iter()
-        .filter_map(|entry| entry.path().map(PathBuf::from))
-        .filter(|path| !path.as_os_str().is_empty())
-        .collect();
-    let ignored_paths = collect_ignored_paths_with_git(&repo, &status_paths);
+        let statuses = repo
+            .statuses(Some(&mut status_options))
+            .map_err(|e| e.to_string())?;
+        let status_paths: Vec<PathBuf> = statuses
+            .iter()
+            .filter_map(|entry| entry.path().map(PathBuf::from))
+            .filter(|path| !path.as_os_str().is_empty())
+            .collect();
+        let ignored_paths = collect_ignored_paths_with_git(&repo, &status_paths);
+        let diff_stats_skip_reason = (statuses.len() > MAX_STATUS_DIFF_STATS_FILES)
+            .then_some("too_many_changed_files");
 
-    let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
-    let index = repo.index().ok();
+        let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
+        let index = repo.index().ok();
 
-    let mut files = Vec::new();
-    let mut staged_files = Vec::new();
-    let mut unstaged_files = Vec::new();
-    let mut total_additions = 0i64;
-    let mut total_deletions = 0i64;
-    for entry in statuses.iter() {
-        let path = entry.path().unwrap_or("");
-        if path.is_empty() {
-            continue;
-        }
-        if should_skip_ignored_path_with_cache(&repo, Path::new(path), ignored_paths.as_ref()) {
-            continue;
-        }
-        if let Some(index) = index.as_ref() {
-            if let Some(entry) = index.get_path(Path::new(path), 0) {
-                if entry.flags_extended & INDEX_SKIP_WORKTREE_FLAG != 0 {
-                    continue;
+        let mut files = Vec::new();
+        let mut staged_files = Vec::new();
+        let mut unstaged_files = Vec::new();
+        let mut total_additions = 0i64;
+        let mut total_deletions = 0i64;
+        for entry in statuses.iter() {
+            let path = entry.path().unwrap_or("");
+            if path.is_empty() {
+                continue;
+            }
+            if should_skip_ignored_path_with_cache(&repo, Path::new(path), ignored_paths.as_ref()) {
+                continue;
+            }
+            if let Some(index) = index.as_ref() {
+                if let Some(entry) = index.get_path(Path::new(path), 0) {
+                    if entry.flags_extended & INDEX_SKIP_WORKTREE_FLAG != 0 {
+                        continue;
+                    }
                 }
             }
-        }
-        let status = entry.status();
-        let normalized_path = normalize_git_path(path);
-        let include_index = status.intersects(
-            Status::INDEX_NEW
-                | Status::INDEX_MODIFIED
-                | Status::INDEX_DELETED
-                | Status::INDEX_RENAMED
-                | Status::INDEX_TYPECHANGE,
-        );
-        let include_workdir = status.intersects(
-            Status::WT_NEW
-                | Status::WT_MODIFIED
-                | Status::WT_DELETED
-                | Status::WT_RENAMED
-                | Status::WT_TYPECHANGE,
-        );
-        let mut combined_additions = 0i64;
-        let mut combined_deletions = 0i64;
+            let status = entry.status();
+            let normalized_path = normalize_git_path(path);
+            let include_index = status.intersects(
+                Status::INDEX_NEW
+                    | Status::INDEX_MODIFIED
+                    | Status::INDEX_DELETED
+                    | Status::INDEX_RENAMED
+                    | Status::INDEX_TYPECHANGE,
+            );
+            let include_workdir = status.intersects(
+                Status::WT_NEW
+                    | Status::WT_MODIFIED
+                    | Status::WT_DELETED
+                    | Status::WT_RENAMED
+                    | Status::WT_TYPECHANGE,
+            );
+            let mut combined_additions = 0i64;
+            let mut combined_deletions = 0i64;
 
-        if include_index {
-            let (additions, deletions) =
-                diff_stats_for_path(&repo, head_tree.as_ref(), path, true, false).unwrap_or((0, 0));
-            if let Some(status_str) = status_for_index(status) {
-                staged_files.push(GitFileStatus {
-                    path: normalized_path.clone(),
+            if include_index {
+                let (additions, deletions) = if diff_stats_skip_reason.is_some() {
+                    (0, 0)
+                } else {
+                    diff_stats_for_path(&repo, head_tree.as_ref(), path, true, false)
+                        .unwrap_or((0, 0))
+                };
+                if let Some(status_str) = status_for_index(status) {
+                    staged_files.push(GitFileStatus {
+                        path: normalized_path.clone(),
+                        status: status_str.to_string(),
+                        additions,
+                        deletions,
+                    });
+                }
+                combined_additions += additions;
+                combined_deletions += deletions;
+                total_additions += additions;
+                total_deletions += deletions;
+            }
+
+            if include_workdir {
+                let (additions, deletions) = if diff_stats_skip_reason.is_some() {
+                    (0, 0)
+                } else {
+                    diff_stats_for_path(&repo, head_tree.as_ref(), path, false, true)
+                        .unwrap_or((0, 0))
+                };
+                if let Some(status_str) = status_for_workdir(status) {
+                    unstaged_files.push(GitFileStatus {
+                        path: normalized_path.clone(),
+                        status: status_str.to_string(),
+                        additions,
+                        deletions,
+                    });
+                }
+                combined_additions += additions;
+                combined_deletions += deletions;
+                total_additions += additions;
+                total_deletions += deletions;
+            }
+
+            if include_index || include_workdir {
+                let status_str = status_for_workdir(status)
+                    .or_else(|| status_for_index(status))
+                    .unwrap_or("--");
+                files.push(GitFileStatus {
+                    path: normalized_path,
                     status: status_str.to_string(),
-                    additions,
-                    deletions,
+                    additions: combined_additions,
+                    deletions: combined_deletions,
                 });
             }
-            combined_additions += additions;
-            combined_deletions += deletions;
-            total_additions += additions;
-            total_deletions += deletions;
         }
 
-        if include_workdir {
-            let (additions, deletions) =
-                diff_stats_for_path(&repo, head_tree.as_ref(), path, false, true).unwrap_or((0, 0));
-            if let Some(status_str) = status_for_workdir(status) {
-                unstaged_files.push(GitFileStatus {
-                    path: normalized_path.clone(),
-                    status: status_str.to_string(),
-                    additions,
-                    deletions,
-                });
-            }
-            combined_additions += additions;
-            combined_deletions += deletions;
-            total_additions += additions;
-            total_deletions += deletions;
-        }
-
-        if include_index || include_workdir {
-            let status_str = status_for_workdir(status)
-                .or_else(|| status_for_index(status))
-                .unwrap_or("--");
-            files.push(GitFileStatus {
-                path: normalized_path,
-                status: status_str.to_string(),
-                additions: combined_additions,
-                deletions: combined_deletions,
-            });
-        }
-    }
-
-    Ok(json!({
-        "branchName": branch_name,
-        "files": files,
-        "stagedFiles": staged_files,
-        "unstagedFiles": unstaged_files,
-        "totalAdditions": total_additions,
-        "totalDeletions": total_deletions,
-    }))
+        Ok(json!({
+            "branchName": branch_name,
+            "files": files,
+            "stagedFiles": staged_files,
+            "unstagedFiles": unstaged_files,
+            "totalAdditions": total_additions,
+            "totalDeletions": total_deletions,
+            "statusDiffStatsSkipped": diff_stats_skip_reason.is_some(),
+            "statusDiffStatsSkipReason": diff_stats_skip_reason,
+            "statusDiffStatsLimit": MAX_STATUS_DIFF_STATS_FILES,
+        }))
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 pub(super) async fn get_git_diffs_inner(

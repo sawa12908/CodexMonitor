@@ -1,5 +1,10 @@
 import { listen } from "@tauri-apps/api/event";
-import type { AppServerEvent, DictationEvent, DictationModelStatus } from "../types";
+import type {
+  AppServerEvent,
+  DictationEvent,
+  DictationModelStatus,
+  ResearchRun,
+} from "../types";
 
 export type Unsubscribe = () => void;
 
@@ -86,6 +91,7 @@ const dictationDownloadHub = createEventHub<DictationModelStatus>("dictation-dow
 const dictationEventHub = createEventHub<DictationEvent>("dictation-event");
 const terminalOutputHub = createEventHub<TerminalOutputEvent>("terminal-output");
 const terminalExitHub = createEventHub<TerminalExitEvent>("terminal-exit");
+const researchRunHub = createEventHub<ResearchRun>("research-run-event");
 const updaterCheckHub = createEventHub<void>("updater-check");
 const menuNewAgentHub = createEventHub<void>("menu-new-agent");
 const menuNewWorktreeAgentHub = createEventHub<void>("menu-new-worktree-agent");
@@ -145,6 +151,13 @@ export function subscribeTerminalExit(
   options?: SubscriptionOptions,
 ): Unsubscribe {
   return terminalExitHub.subscribe(onEvent, options);
+}
+
+export function subscribeResearchRunEvents(
+  onEvent: (run: ResearchRun) => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return researchRunHub.subscribe(onEvent, options);
 }
 
 export function subscribeUpdaterCheck(

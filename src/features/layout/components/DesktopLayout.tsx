@@ -55,6 +55,7 @@ function setLayerInert(
 
 type DesktopLayoutProps = {
   sidebarNode: ReactNode;
+  leftPanelNode?: ReactNode;
   updateToastNode: ReactNode;
   approvalToastsNode: ReactNode;
   errorToastsNode: ReactNode;
@@ -82,6 +83,7 @@ type DesktopLayoutProps = {
 
 export function DesktopLayout({
   sidebarNode,
+  leftPanelNode,
   updateToastNode,
   approvalToastsNode,
   errorToastsNode,
@@ -147,6 +149,7 @@ export function DesktopLayout({
         aria-label="Resize sidebar"
         onMouseDown={onSidebarResizeStart}
       />
+      {showWorkspace ? leftPanelNode : null}
 
       <section className="main">
         {updateToastNode}

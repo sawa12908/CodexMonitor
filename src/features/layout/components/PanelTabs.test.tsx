@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { PanelTabs, type PanelTabId } from "./PanelTabs";
@@ -27,6 +27,23 @@ describe("PanelTabs", () => {
     await waitFor(() => {
       expect(tabs[2].getAttribute("aria-selected")).toBe("true");
       expect(document.activeElement).toBe(tabs[2]);
+    });
+  });
+
+  it("includes the research tab and supports end-key selection", async () => {
+    render(<PanelTabsHarness />);
+    const tablists = screen.getAllByRole("tablist");
+    const tabs = within(tablists[tablists.length - 1] as HTMLElement).getAllByRole("tab");
+
+    expect(tabs.length).toBe(4);
+    expect(tabs[3]?.getAttribute("aria-label")).toBe("Research");
+
+    tabs[0].focus();
+    fireEvent.keyDown(tabs[0], { key: "End" });
+
+    await waitFor(() => {
+      expect(tabs[3].getAttribute("aria-selected")).toBe("true");
+      expect(document.activeElement).toBe(tabs[3]);
     });
   });
 });

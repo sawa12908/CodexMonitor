@@ -12,6 +12,11 @@
   transition: grid-template-columns 220ms ease;
 }
 
+.app.layout-desktop .main {
+  grid-column: 3;
+  grid-row: 1;
+}
+
 .app.reduced-transparency .main {
   background: var(--surface-messages);
 }

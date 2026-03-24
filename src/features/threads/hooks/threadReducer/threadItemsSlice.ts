@@ -14,6 +14,39 @@ import {
   prefersUpdatedSort,
 } from "./common";
 
+const OPTIMISTIC_USER_MESSAGE_ID_PREFIX = "optimistic-user-";
+
+function isOptimisticUserMessage(item: ConversationItem) {
+  return (
+    item.kind === "message" &&
+    item.role === "user" &&
+    item.id.startsWith(OPTIMISTIC_USER_MESSAGE_ID_PREFIX)
+  );
+}
+
+function hasMatchingUserMessagePayload(
+  left: ConversationItem,
+  right: ConversationItem,
+) {
+  if (
+    left.kind !== "message" ||
+    left.role !== "user" ||
+    right.kind !== "message" ||
+    right.role !== "user"
+  ) {
+    return false;
+  }
+  if (left.text !== right.text) {
+    return false;
+  }
+  const leftImages = left.images ?? [];
+  const rightImages = right.images ?? [];
+  if (leftImages.length !== rightImages.length) {
+    return false;
+  }
+  return leftImages.every((image, index) => image === rightImages[index]);
+}
+
 export function reduceThreadItems(state: ThreadState, action: ThreadAction): ThreadState {
   switch (action.type) {
     case "addAssistantMessage": {
@@ -106,6 +139,30 @@ export function reduceThreadItems(state: ThreadState, action: ThreadAction): Thr
       let list = state.itemsByThread[action.threadId] ?? [];
       const item = normalizeItem(action.item);
       const isUserMessage = item.kind === "message" && item.role === "user";
+      if (isUserMessage && isOptimisticUserMessage(item)) {
+        const hasMatchingRemoteUserMessage = list.some(
+          (entry) =>
+            entry.kind === "message" &&
+            entry.role === "user" &&
+            !isOptimisticUserMessage(entry) &&
+            hasMatchingUserMessagePayload(entry, item),
+        );
+        if (hasMatchingRemoteUserMessage) {
+          return state;
+        }
+      }
+      if (isUserMessage && !isOptimisticUserMessage(item)) {
+        const optimisticIndex = list.findIndex(
+          (entry) =>
+            isOptimisticUserMessage(entry) &&
+            hasMatchingUserMessagePayload(entry, item),
+        );
+        if (optimisticIndex >= 0) {
+          const nextList = [...list];
+          nextList[optimisticIndex] = item;
+          list = nextList;
+        }
+      }
       const hadUserMessage = isUserMessage
         ? list.some((entry) => entry.kind === "message" && entry.role === "user")
         : false;

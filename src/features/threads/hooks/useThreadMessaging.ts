@@ -1,10 +1,11 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import type { Dispatch, MutableRefObject } from "react";
 import * as Sentry from "@sentry/react";
 import type {
   AccessMode,
   AppMention,
   ComposerSendIntent,
+  ConversationItem,
   SendMessageResult,
   RateLimitSnapshot,
   CustomPromptOption,
@@ -31,6 +32,9 @@ import {
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 import { useReviewPrompt } from "./useReviewPrompt";
 import { formatRelativeTime } from "@utils/time";
+
+const OPTIMISTIC_USER_MESSAGE_ID_PREFIX = "optimistic-user-";
+const PROCESSING_THREAD_RECONCILE_INTERVAL_MS = 15000;
 
 type SendMessageOptions = {
   skipPromptExpansion?: boolean;
@@ -80,6 +84,7 @@ type UseThreadMessagingOptions = {
   ensureThreadForActiveWorkspace: () => Promise<string | null>;
   ensureThreadForWorkspace: (workspaceId: string) => Promise<string | null>;
   refreshThread: (workspaceId: string, threadId: string) => Promise<string | null>;
+  reconcileThread?: (workspaceId: string, threadId: string) => Promise<string | null>;
   forkThreadForWorkspace: (
     workspaceId: string,
     threadId: string,
@@ -132,10 +137,13 @@ export function useThreadMessaging({
   ensureThreadForActiveWorkspace,
   ensureThreadForWorkspace,
   refreshThread,
+  reconcileThread,
   forkThreadForWorkspace,
   updateThreadParent,
   registerDetachedReviewChild,
 }: UseThreadMessagingOptions) {
+  const reconcileProcessingThread = reconcileThread ?? refreshThread;
+
   const sendMessageToThread = useCallback(
     async (
       workspace: WorkspaceInfo,
@@ -201,6 +209,7 @@ export function useThreadMessaging({
       });
       const timestamp = Date.now();
       const customThreadName = getCustomName(workspace.id, threadId) ?? null;
+      const hasCustomName = Boolean(customThreadName);
       recordThreadActivity(workspace.id, threadId, timestamp);
       dispatch({
         type: "setThreadTimestamp",
@@ -312,6 +321,20 @@ export function useThreadMessaging({
           safeMessageActivity();
           return { status: "steer_failed" };
         }
+        const optimisticMessage: ConversationItem = {
+          id: `${OPTIMISTIC_USER_MESSAGE_ID_PREFIX}${timestamp}-${Math.random().toString(36).slice(2, 10)}`,
+          kind: "message",
+          role: "user",
+          text: finalText,
+          images: images.length > 0 ? [...images] : undefined,
+        };
+        dispatch({
+          type: "upsertItem",
+          workspaceId: workspace.id,
+          threadId,
+          item: optimisticMessage,
+          hasCustomName,
+        });
         if (requestMode === "steer") {
           const result = (response?.result ?? response) as Record<string, unknown>;
           const steeredTurnId = asString(result?.turnId ?? result?.turn_id ?? "");
@@ -369,6 +392,7 @@ export function useThreadMessaging({
       ensureWorkspaceRuntimeCodexArgs,
       shouldPreflightRuntimeCodexArgsForSend,
       activeTurnIdByThread,
+      getCustomName,
       markProcessing,
       model,
       onDebug,
@@ -380,6 +404,35 @@ export function useThreadMessaging({
       threadStatusById,
     ],
   );
+
+  useEffect(() => {
+    if (!activeWorkspace || !activeThreadId) {
+      return;
+    }
+    if (!threadStatusById[activeThreadId]?.isProcessing) {
+      return;
+    }
+    let cancelled = false;
+    let isReconciling = false;
+    const intervalId = globalThis.setInterval(() => {
+      if (cancelled || isReconciling) {
+        return;
+      }
+      isReconciling = true;
+      void reconcileProcessingThread(activeWorkspace.id, activeThreadId).finally(() => {
+        isReconciling = false;
+      });
+    }, PROCESSING_THREAD_RECONCILE_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      globalThis.clearInterval(intervalId);
+    };
+  }, [
+    activeThreadId,
+    activeWorkspace,
+    reconcileProcessingThread,
+    threadStatusById,
+  ]);
 
   const sendUserMessage = useCallback(
     async (

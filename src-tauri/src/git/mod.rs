@@ -1,8 +1,11 @@
+use std::time::Instant;
+
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 use tauri::{AppHandle, State};
 
+use crate::diagnostics;
 use crate::remote_backend;
 use crate::shared::{git_rpc, git_ui_core};
 use crate::state::AppState;
@@ -84,16 +87,70 @@ pub(crate) async fn get_git_status(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Value, String> {
+    let started_at = Instant::now();
     let request = git_rpc::WorkspaceIdRequest {
         workspace_id: workspace_id.clone(),
     };
-    try_remote_value!(
-        state,
-        app,
+    let result = match call_remote_if_enabled(
+        &state,
+        &app,
         git_rpc::METHOD_GET_GIT_STATUS,
-        git_remote_params(&request)?
-    );
-    git_ui_core::get_git_status_core(&state.workspaces, workspace_id).await
+        git_remote_params(&request)?,
+    )
+    .await?
+    {
+        Some(response) => Ok(response),
+        None => git_ui_core::get_git_status_core(&state.workspaces, workspace_id.clone()).await,
+    };
+
+    match &result {
+        Ok(response) => {
+            let files = response
+                .get("files")
+                .and_then(Value::as_array)
+                .map_or(0, |value| value.len());
+            let staged_files = response
+                .get("stagedFiles")
+                .and_then(Value::as_array)
+                .map_or(0, |value| value.len());
+            let unstaged_files = response
+                .get("unstagedFiles")
+                .and_then(Value::as_array)
+                .map_or(0, |value| value.len());
+            let _ = diagnostics::append_app_diagnostic(
+                &app,
+                "backend.get_git_status",
+                "done",
+                json!({
+                    "workspaceId": workspace_id,
+                    "durationMs": started_at.elapsed().as_millis(),
+                    "branchName": response.get("branchName").and_then(Value::as_str),
+                    "fileCount": files,
+                    "stagedFileCount": staged_files,
+                    "unstagedFileCount": unstaged_files,
+                    "totalAdditions": response.get("totalAdditions").and_then(Value::as_i64),
+                    "totalDeletions": response.get("totalDeletions").and_then(Value::as_i64),
+                    "statusDiffStatsSkipped": response.get("statusDiffStatsSkipped").and_then(Value::as_bool),
+                    "statusDiffStatsSkipReason": response.get("statusDiffStatsSkipReason").and_then(Value::as_str),
+                    "statusDiffStatsLimit": response.get("statusDiffStatsLimit").and_then(Value::as_u64),
+                }),
+            );
+        }
+        Err(error) => {
+            let _ = diagnostics::append_app_diagnostic(
+                &app,
+                "backend.get_git_status",
+                "error",
+                json!({
+                    "workspaceId": workspace_id,
+                    "durationMs": started_at.elapsed().as_millis(),
+                    "error": error,
+                }),
+            );
+        }
+    }
+
+    result
 }
 
 #[tauri::command]
@@ -377,17 +434,57 @@ pub(crate) async fn get_git_diffs(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Vec<GitFileDiff>, String> {
+    let started_at = Instant::now();
     let request = git_rpc::WorkspaceIdRequest {
         workspace_id: workspace_id.clone(),
     };
-    try_remote_typed!(
-        state,
-        app,
+    let result = match call_remote_typed_if_enabled::<Vec<GitFileDiff>>(
+        &state,
+        &app,
         git_rpc::METHOD_GET_GIT_DIFFS,
         git_remote_params(&request)?,
-        Vec<GitFileDiff>
-    );
-    git_ui_core::get_git_diffs_core(&state.workspaces, &state.app_settings, workspace_id).await
+    )
+    .await?
+    {
+        Some(response) => Ok(response),
+        None => {
+            git_ui_core::get_git_diffs_core(
+                &state.workspaces,
+                &state.app_settings,
+                workspace_id.clone(),
+            )
+            .await
+        }
+    };
+
+    match &result {
+        Ok(response) => {
+            let _ = diagnostics::append_app_diagnostic(
+                &app,
+                "backend.get_git_diffs",
+                "done",
+                json!({
+                    "workspaceId": workspace_id,
+                    "durationMs": started_at.elapsed().as_millis(),
+                    "diffCount": response.len(),
+                }),
+            );
+        }
+        Err(error) => {
+            let _ = diagnostics::append_app_diagnostic(
+                &app,
+                "backend.get_git_diffs",
+                "error",
+                json!({
+                    "workspaceId": workspace_id,
+                    "durationMs": started_at.elapsed().as_millis(),
+                    "error": error,
+                }),
+            );
+        }
+    }
+
+    result
 }
 
 #[tauri::command]
@@ -397,18 +494,59 @@ pub(crate) async fn get_git_log(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<GitLogResponse, String> {
+    let started_at = Instant::now();
     let request = git_rpc::GetGitLogRequest {
         workspace_id: workspace_id.clone(),
         limit: optional_usize_to_u32(limit),
     };
-    try_remote_typed!(
-        state,
-        app,
+    let result = match call_remote_typed_if_enabled::<GitLogResponse>(
+        &state,
+        &app,
         git_rpc::METHOD_GET_GIT_LOG,
         git_remote_params(&request)?,
-        GitLogResponse
-    );
-    git_ui_core::get_git_log_core(&state.workspaces, workspace_id, limit).await
+    )
+    .await?
+    {
+        Some(response) => Ok(response),
+        None => git_ui_core::get_git_log_core(&state.workspaces, workspace_id.clone(), limit).await,
+    };
+
+    match &result {
+        Ok(response) => {
+            let response_value = serde_json::to_value(response).unwrap_or(Value::Null);
+            let _ = diagnostics::append_app_diagnostic(
+                &app,
+                "backend.get_git_log",
+                "done",
+                json!({
+                    "workspaceId": workspace_id,
+                    "durationMs": started_at.elapsed().as_millis(),
+                    "entryCount": response_value.get("entries").and_then(Value::as_array).map_or(0, |value| value.len()),
+                    "aheadEntryCount": response_value.get("aheadEntries").and_then(Value::as_array).map_or(0, |value| value.len()),
+                    "behindEntryCount": response_value.get("behindEntries").and_then(Value::as_array).map_or(0, |value| value.len()),
+                    "total": response_value.get("total").and_then(Value::as_i64),
+                    "ahead": response_value.get("ahead").and_then(Value::as_i64),
+                    "behind": response_value.get("behind").and_then(Value::as_i64),
+                    "upstream": response_value.get("upstream").and_then(Value::as_str),
+                }),
+            );
+        }
+        Err(error) => {
+            let _ = diagnostics::append_app_diagnostic(
+                &app,
+                "backend.get_git_log",
+                "error",
+                json!({
+                    "workspaceId": workspace_id,
+                    "durationMs": started_at.elapsed().as_millis(),
+                    "limit": limit,
+                    "error": error,
+                }),
+            );
+        }
+    }
+
+    result
 }
 
 #[tauri::command]

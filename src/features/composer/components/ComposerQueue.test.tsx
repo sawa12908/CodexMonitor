@@ -46,4 +46,21 @@ describe("ComposerQueue", () => {
     expect(onDeleteQueued).toHaveBeenCalledTimes(1);
     expect(onDeleteQueued).toHaveBeenCalledWith(queuedItem.id);
   });
+
+  it("shows sending items without the queue action menu", () => {
+    render(
+      <ComposerQueue
+        queuedMessages={[
+          {
+            ...queuedItem,
+            id: "sending-1",
+            state: "sending",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Sending: Add link to GitHub repo too")).toBeTruthy();
+    expect(screen.queryByLabelText("Queue item menu")).toBeNull();
+  });
 });

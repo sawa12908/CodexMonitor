@@ -158,6 +158,65 @@ describe("useThreadMessaging telemetry", () => {
     expect(ensureWorkspaceRuntimeCodexArgs).toHaveBeenCalledWith("ws-1", "thread-1");
   });
 
+  it("optimistically echoes the sent user message after turn/start succeeds", async () => {
+    const dispatch = vi.fn();
+    const { result } = renderHook(() =>
+      useThreadMessaging({
+        activeWorkspace: workspace,
+        activeThreadId: "thread-1",
+        accessMode: "current",
+        model: null,
+        effort: null,
+        collaborationMode: null,
+        reviewDeliveryMode: "inline",
+        steerEnabled: false,
+        customPrompts: [],
+        threadStatusById: {},
+        activeTurnIdByThread: {},
+        rateLimitsByWorkspace: {},
+        pendingInterruptsRef: { current: new Set<string>() },
+        dispatch,
+        getCustomName: vi.fn(() => undefined),
+        markProcessing: vi.fn(),
+        markReviewing: vi.fn(),
+        setActiveTurnId: vi.fn(),
+        recordThreadActivity: vi.fn(),
+        safeMessageActivity: vi.fn(),
+        onDebug: vi.fn(),
+        pushThreadErrorMessage: vi.fn(),
+        ensureThreadForActiveWorkspace: vi.fn(async () => "thread-1"),
+        ensureThreadForWorkspace: vi.fn(async () => "thread-1"),
+        refreshThread: vi.fn(async () => null),
+        forkThreadForWorkspace: vi.fn(async () => null),
+        updateThreadParent: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      const sendResult = await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "hello world",
+        ["/tmp/image.png"],
+      );
+      expect(sendResult).toEqual({ status: "sent" });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      item: expect.objectContaining({
+        id: expect.stringMatching(/^optimistic-user-/),
+        kind: "message",
+        role: "user",
+        text: "hello world",
+        images: ["/tmp/image.png"],
+      }),
+      hasCustomName: false,
+    });
+  });
+
   it("forwards explicit app mentions to turn/start", async () => {
     const { result } = renderHook(() =>
       useThreadMessaging({
@@ -271,9 +330,18 @@ describe("useThreadMessaging telemetry", () => {
     );
     expect(sendUserMessageService).not.toHaveBeenCalled();
     expect(ensureWorkspaceRuntimeCodexArgs).not.toHaveBeenCalled();
-    expect(dispatch).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "upsertItem" }),
-    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      item: expect.objectContaining({
+        id: expect.stringMatching(/^optimistic-user-/),
+        kind: "message",
+        role: "user",
+        text: "steer this",
+      }),
+      hasCustomName: false,
+    });
   });
 
   it("resets stale processing state when turn/steer reports no active turn", async () => {
@@ -486,5 +554,100 @@ describe("useThreadMessaging telemetry", () => {
       "thread-1",
       "Turn steer failed: steer network failure",
     );
+  });
+
+  it("reconciles the active processing thread on an interval", async () => {
+    vi.useFakeTimers();
+    const reconcileThread = vi.fn(async () => null);
+    const processingState = {
+      isProcessing: true,
+      isReviewing: false,
+      hasUnread: false,
+      processingStartedAt: 0,
+      lastDurationMs: null,
+    };
+
+    const { rerender } = renderHook(
+      ({
+        threadStatusById,
+      }: {
+        threadStatusById: Record<
+          string,
+          {
+            isProcessing: boolean;
+            isReviewing: boolean;
+            hasUnread: boolean;
+            processingStartedAt: number | null;
+            lastDurationMs: number | null;
+          }
+        >;
+      }) =>
+        useThreadMessaging({
+          activeWorkspace: workspace,
+          activeThreadId: "thread-1",
+          accessMode: "current",
+          model: null,
+          effort: null,
+          collaborationMode: null,
+          reviewDeliveryMode: "inline",
+          steerEnabled: false,
+          customPrompts: [],
+          threadStatusById,
+          activeTurnIdByThread: {},
+          rateLimitsByWorkspace: {},
+          pendingInterruptsRef: { current: new Set<string>() },
+          dispatch: vi.fn(),
+          getCustomName: vi.fn(() => undefined),
+          markProcessing: vi.fn(),
+          markReviewing: vi.fn(),
+          setActiveTurnId: vi.fn(),
+          recordThreadActivity: vi.fn(),
+          safeMessageActivity: vi.fn(),
+          onDebug: vi.fn(),
+          pushThreadErrorMessage: vi.fn(),
+          ensureThreadForActiveWorkspace: vi.fn(async () => "thread-1"),
+          ensureThreadForWorkspace: vi.fn(async () => "thread-1"),
+          refreshThread: vi.fn(async () => null),
+          reconcileThread,
+          forkThreadForWorkspace: vi.fn(async () => null),
+          updateThreadParent: vi.fn(),
+        }),
+      {
+        initialProps: {
+          threadStatusById: {
+            "thread-1": processingState,
+          },
+        },
+      },
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(14_999);
+      await Promise.resolve();
+    });
+    expect(reconcileThread).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+    expect(reconcileThread).toHaveBeenCalledTimes(1);
+    expect(reconcileThread).toHaveBeenCalledWith("ws-1", "thread-1");
+
+    rerender({
+      threadStatusById: {
+        "thread-1": {
+          ...processingState,
+          isProcessing: false,
+        },
+      },
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(15_000);
+      await Promise.resolve();
+    });
+    expect(reconcileThread).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 });

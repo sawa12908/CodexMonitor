@@ -9,6 +9,7 @@ use tauri::WindowEvent;
 mod backend;
 mod codex;
 mod daemon_binary;
+mod diagnostics;
 mod dictation;
 mod event_sink;
 mod files;
@@ -23,6 +24,7 @@ mod menu;
 mod notifications;
 mod plugins;
 mod prompts;
+mod research;
 mod remote_backend;
 mod rules;
 mod settings;
@@ -115,6 +117,17 @@ pub fn run() {
         .setup(|app| {
             let state = state::AppState::load(&app.handle());
             app.manage(state);
+            let _ = diagnostics::append_app_diagnostic(
+                &app.handle(),
+                "app",
+                "session_start",
+                serde_json::json!({
+                    "version": app.package_info().version.to_string(),
+                    "platform": std::env::consts::OS,
+                    "arch": std::env::consts::ARCH,
+                }),
+            );
+            research::initialize(app.handle().clone());
             #[cfg(target_os = "windows")]
             {
                 if let Some(main_window) = app.get_webview_window("main") {
@@ -174,6 +187,8 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
+            diagnostics::append_frontend_diagnostic,
+            diagnostics::get_diagnostic_log_path,
             settings::get_app_settings,
             settings::update_app_settings,
             plugins::list_plugins,
@@ -299,6 +314,12 @@ pub fn run() {
             tailscale::tailscale_daemon_start,
             tailscale::tailscale_daemon_stop,
             tailscale::tailscale_daemon_status,
+            research::get_research_api_config,
+            research::list_research_runs,
+            research::create_research_run,
+            research::retry_research_delivery,
+            research::dismiss_research_run,
+            research::set_research_run_delivery_status,
             is_mobile_runtime
         ])
         .build(tauri::generate_context!())

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GitLogEntry, WorkspaceInfo } from "../../../types";
-import { getGitLog } from "../../../services/tauri";
+import { appendFrontendDiagnostic, getGitLog } from "../../../services/tauri";
 
 type GitLogState = {
   entries: GitLogEntry[];
@@ -44,13 +44,27 @@ export function useGitLog(
     const workspaceId = activeWorkspace.id;
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
+    const startedAt = performance.now();
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
       const response = await getGitLog(workspaceId);
-      if (
+      const durationMs = Math.round(performance.now() - startedAt);
+      const isStale =
         requestIdRef.current !== requestId ||
-        workspaceIdRef.current !== workspaceId
-      ) {
+        workspaceIdRef.current !== workspaceId;
+      void appendFrontendDiagnostic("frontend.useGitLog", "refresh_done", {
+        workspaceId,
+        requestId,
+        durationMs,
+        stale: isStale,
+        entryCount: response.entries.length,
+        aheadEntryCount: response.aheadEntries.length,
+        behindEntryCount: response.behindEntries.length,
+        total: response.total,
+        ahead: response.ahead,
+        behind: response.behind,
+      });
+      if (isStale) {
         return;
       }
       setState({
@@ -66,10 +80,19 @@ export function useGitLog(
       });
     } catch (error) {
       console.error("Failed to load git log", error);
-      if (
+      const durationMs = Math.round(performance.now() - startedAt);
+      const message = error instanceof Error ? error.message : String(error);
+      const isStale =
         requestIdRef.current !== requestId ||
-        workspaceIdRef.current !== workspaceId
-      ) {
+        workspaceIdRef.current !== workspaceId;
+      void appendFrontendDiagnostic("frontend.useGitLog", "refresh_error", {
+        workspaceId,
+        requestId,
+        durationMs,
+        stale: isStale,
+        error: message,
+      });
+      if (isStale) {
         return;
       }
       setState({
@@ -81,7 +104,7 @@ export function useGitLog(
         behindEntries: [],
         upstream: null,
         isLoading: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       });
     }
   }, [activeWorkspace]);

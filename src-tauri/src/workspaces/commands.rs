@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
 use std::sync::Arc;
+use std::time::Instant;
 
+use serde_json::json;
 use tauri::{AppHandle, Manager, State};
 
 use super::files::{list_workspace_files_inner, read_workspace_file_inner, WorkspaceFileResponse};
@@ -18,6 +20,7 @@ use super::worktree::{
 
 use crate::backend::app_server::WorkspaceSession;
 use crate::codex::spawn_workspace_session;
+use crate::diagnostics;
 use crate::git_utils::resolve_git_root;
 use crate::remote_backend;
 use crate::shared::{workspace_rpc, workspaces_core};
@@ -621,22 +624,54 @@ pub(crate) async fn list_workspace_files(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Vec<String>, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        let request = workspace_rpc::WorkspaceIdRequest { workspace_id };
+    let started_at = Instant::now();
+    let result = if remote_backend::is_remote_mode(&*state).await {
+        let request = workspace_rpc::WorkspaceIdRequest {
+            workspace_id: workspace_id.clone(),
+        };
         let response = remote_backend::call_remote(
             &*state,
-            app,
+            app.clone(),
             "list_workspace_files",
             workspace_remote_params(&request)?,
         )
         .await?;
-        return serde_json::from_value(response).map_err(|err| err.to_string());
-    }
-
-    workspaces_core::list_workspace_files_core(&state.workspaces, &workspace_id, |root| {
+        serde_json::from_value(response).map_err(|err| err.to_string())
+    } else {
+        workspaces_core::list_workspace_files_core(&state.workspaces, &workspace_id, |root| {
         list_workspace_files_inner(root, usize::MAX)
     })
-    .await
+        .await
+    };
+
+    match &result {
+        Ok(files) => {
+            let _ = diagnostics::append_app_diagnostic(
+                &app,
+                "backend.list_workspace_files",
+                "done",
+                json!({
+                    "workspaceId": workspace_id,
+                    "durationMs": started_at.elapsed().as_millis(),
+                    "fileCount": files.len(),
+                }),
+            );
+        }
+        Err(error) => {
+            let _ = diagnostics::append_app_diagnostic(
+                &app,
+                "backend.list_workspace_files",
+                "error",
+                json!({
+                    "workspaceId": workspace_id,
+                    "durationMs": started_at.elapsed().as_millis(),
+                    "error": error,
+                }),
+            );
+        }
+    }
+
+    result
 }
 
 #[tauri::command]

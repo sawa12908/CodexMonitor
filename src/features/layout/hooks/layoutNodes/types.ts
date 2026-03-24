@@ -25,6 +25,8 @@ import type {
   ModelOption,
   OpenAppTarget,
   QueuedMessage,
+  ResearchApiConfig,
+  ResearchRun,
   FollowUpMessageBehavior,
   PullRequestReviewAction,
   PullRequestReviewIntent,
@@ -263,8 +265,18 @@ export type LayoutNodesOptions = {
   worktreeApplyError: string | null;
   worktreeApplySuccess: boolean;
   onApplyWorktreeChanges?: () => void | Promise<void>;
-  filePanelMode: "git" | "files" | "prompts";
-  onFilePanelModeChange: (mode: "git" | "files" | "prompts") => void;
+  filePanelMode: "git" | "files" | "prompts" | "research";
+  onFilePanelModeChange: (mode: "git" | "files" | "prompts" | "research") => void;
+  showDetachedResearchDeliveryPrompt: boolean;
+  researchRuns: ResearchRun[];
+  activeResearchRun: ResearchRun | null;
+  researchApiConfig: ResearchApiConfig | null;
+  researchDeliveryPrompt: string;
+  onSelectResearchRun: (runId: string) => void;
+  onResearchDeliveryPromptChange: (value: string) => void;
+  onRetryResearchDelivery: (runId: string) => void | Promise<void>;
+  onDismissResearchRun: (runId: string) => void | Promise<void>;
+  onOpenResearchThread: (run: ResearchRun) => void;
   fileTreeLoading: boolean;
   gitStatus: {
     branchName: string;

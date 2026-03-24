@@ -3,6 +3,8 @@ import AlignLeft from "lucide-react/dist/esm/icons/align-left";
 import Columns2 from "lucide-react/dist/esm/icons/columns-2";
 import type { SidebarToggleProps } from "../../layout/components/SidebarToggleControls";
 import {
+  ResearchPanelCollapseButton,
+  ResearchPanelExpandButton,
   RightPanelCollapseButton,
   RightPanelExpandButton,
 } from "../../layout/components/SidebarToggleControls";
@@ -12,6 +14,7 @@ type MainHeaderActionsProps = {
   gitDiffViewStyle: "split" | "unified";
   onSelectDiffViewStyle: (style: "split" | "unified") => void;
   isCompact: boolean;
+  researchPanelCollapsed: boolean;
   rightPanelCollapsed: boolean;
   sidebarToggleProps: SidebarToggleProps;
 };
@@ -21,6 +24,7 @@ export const MainHeaderActions = memo(function MainHeaderActions({
   gitDiffViewStyle,
   onSelectDiffViewStyle,
   isCompact,
+  researchPanelCollapsed,
   rightPanelCollapsed,
   sidebarToggleProps,
 }: MainHeaderActionsProps) {
@@ -55,11 +59,18 @@ export const MainHeaderActions = memo(function MainHeaderActions({
         </div>
       )}
       {!isCompact ? (
-        rightPanelCollapsed ? (
-          <RightPanelExpandButton {...sidebarToggleProps} />
-        ) : (
-          <RightPanelCollapseButton {...sidebarToggleProps} />
-        )
+        <>
+          {researchPanelCollapsed ? (
+            <ResearchPanelExpandButton {...sidebarToggleProps} />
+          ) : (
+            <ResearchPanelCollapseButton {...sidebarToggleProps} />
+          )}
+          {rightPanelCollapsed ? (
+            <RightPanelExpandButton {...sidebarToggleProps} />
+          ) : (
+            <RightPanelCollapseButton {...sidebarToggleProps} />
+          )}
+        </>
       ) : null}
     </>
   );

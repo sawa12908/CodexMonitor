@@ -11,7 +11,7 @@ import type { GitDiffSource, GitPanelMode } from "../types";
 import { buildPullRequestDraft } from "../../../utils/pullRequestPrompt";
 import { parsePullRequestReviewCommand } from "../utils/pullRequestReviewCommands";
 
-const KNOWN_SLASH_COMMAND_REGEX = /^\/(?:apps|fork|mcp|new|resume|status)\b/i;
+const KNOWN_SLASH_COMMAND_REGEX = /^\/(?:apps|fork|mcp|new|research|resume|status)\b/i;
 
 type ComposerContextAction = {
   id: string;
@@ -24,7 +24,7 @@ type ComposerContextAction = {
 type UsePullRequestComposerOptions = {
   activeWorkspace: WorkspaceInfo | null;
   selectedPullRequest: GitHubPullRequest | null;
-  filePanelMode: "git" | "files" | "prompts";
+  filePanelMode: "git" | "files" | "prompts" | "research";
   gitPanelMode: GitPanelMode;
   centerMode: "chat" | "diff";
   isCompact: boolean;

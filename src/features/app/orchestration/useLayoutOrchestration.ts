@@ -8,6 +8,8 @@ type UseAppShellOrchestrationOptions = {
   isTablet: boolean;
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
+  researchPanelCollapsed: boolean;
+  hasResearchPanel: boolean;
   shouldReduceTransparency: boolean;
   isWorkspaceDropActive: boolean;
   centerMode: "chat" | "diff";
@@ -29,6 +31,8 @@ export function useAppShellOrchestration({
   isTablet,
   sidebarCollapsed,
   rightPanelCollapsed,
+  researchPanelCollapsed,
+  hasResearchPanel,
   shouldReduceTransparency,
   isWorkspaceDropActive,
   centerMode,
@@ -53,6 +57,8 @@ export function useAppShellOrchestration({
     shouldReduceTransparency ? " reduced-transparency" : ""
   }${!isCompact && sidebarCollapsed ? " sidebar-collapsed" : ""}${
     !isCompact && rightPanelCollapsed ? " right-panel-collapsed" : ""
+  }${!isCompact && researchPanelCollapsed ? " research-panel-collapsed" : ""}${
+    !isCompact && !hasResearchPanel ? " research-panel-hidden" : ""
   }${isWindows ? " is-windows" : ""}`;
 
   const appStyle = useMemo<CSSProperties>(
@@ -60,6 +66,9 @@ export function useAppShellOrchestration({
       "--sidebar-width": `${isCompact ? sidebarWidth : sidebarCollapsed ? 0 : sidebarWidth}px`,
       "--right-panel-width": `${
         isCompact ? rightPanelWidth : rightPanelCollapsed ? 0 : rightPanelWidth
+      }px`,
+      "--research-panel-width": `${
+        isCompact || !hasResearchPanel || researchPanelCollapsed ? 0 : 272
       }px`,
       "--chat-diff-split-position-percent": `${chatDiffSplitPositionPercent}%`,
       "--plan-panel-height": `${planPanelHeight}px`,
@@ -99,7 +108,9 @@ export function useAppShellOrchestration({
       debugPanelHeight,
       isWindows,
       isCompact,
+      hasResearchPanel,
       planPanelHeight,
+      researchPanelCollapsed,
       rightPanelCollapsed,
       rightPanelWidth,
       sidebarCollapsed,

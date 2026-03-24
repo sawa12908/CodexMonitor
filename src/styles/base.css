@@ -50,7 +50,10 @@ body {
   min-height: var(--app-height, 100dvh);
   width: 100vw;
   display: grid;
-  grid-template-columns: var(--sidebar-width, 280px) 1fr;
+  grid-template-columns:
+    var(--sidebar-width, 280px)
+    var(--research-panel-width, 0px)
+    1fr;
   background: transparent;
   border-radius: 0;
   overflow: hidden;

@@ -16,6 +16,7 @@ type AppLayoutProps = {
   hasActivePlan: boolean;
   activeWorkspace: boolean;
   sidebarNode: ReactNode;
+  leftPanelNode?: ReactNode;
   messagesNode: ReactNode;
   composerNode: ReactNode;
   approvalToastsNode: ReactNode;
@@ -55,6 +56,7 @@ export const AppLayout = memo(function AppLayout({
   hasActivePlan,
   activeWorkspace,
   sidebarNode,
+  leftPanelNode,
   messagesNode,
   composerNode,
   approvalToastsNode,
@@ -133,6 +135,7 @@ export const AppLayout = memo(function AppLayout({
   return (
     <DesktopLayout
       sidebarNode={sidebarNode}
+      leftPanelNode={leftPanelNode}
       updateToastNode={updateToastNode}
       approvalToastsNode={approvalToastsNode}
       errorToastsNode={errorToastsNode}

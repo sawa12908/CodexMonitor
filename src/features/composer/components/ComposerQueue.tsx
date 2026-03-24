@@ -34,6 +34,7 @@ export function ComposerQueue({
         {queuedMessages.map((item) => (
           <div key={item.id} className="composer-queue-item">
             <span className="composer-queue-text">
+              {item.state === "sending" ? "Sending: " : ""}
               {item.text ||
                 (item.images?.length
                   ? item.images.length === 1
@@ -44,11 +45,13 @@ export function ComposerQueue({
                 ? ` · ${item.images.length} image${item.images.length === 1 ? "" : "s"}`
                 : ""}
             </span>
-            <QueueMenuButton
-              item={item}
-              onEditQueued={onEditQueued}
-              onDeleteQueued={onDeleteQueued}
-            />
+            {item.state === "sending" ? null : (
+              <QueueMenuButton
+                item={item}
+                onEditQueued={onEditQueued}
+                onDeleteQueued={onDeleteQueued}
+              />
+            )}
           </div>
         ))}
       </div>

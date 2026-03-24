@@ -48,6 +48,76 @@ describe("threadReducer", () => {
     }
   });
 
+  it("replaces optimistic user messages when the real event arrives", () => {
+    const optimisticState = threadReducer(initialState, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      item: {
+        id: "optimistic-user-1",
+        kind: "message",
+        role: "user",
+        text: "Hello there",
+        images: ["/tmp/screenshot.png"],
+      },
+      hasCustomName: false,
+    });
+
+    const next = threadReducer(optimisticState, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      item: {
+        id: "user-remote-1",
+        kind: "message",
+        role: "user",
+        text: "Hello there",
+        images: ["/tmp/screenshot.png"],
+      },
+      hasCustomName: false,
+    });
+
+    expect(next.itemsByThread["thread-1"]).toEqual([
+      {
+        id: "user-remote-1",
+        kind: "message",
+        role: "user",
+        text: "Hello there",
+        images: ["/tmp/screenshot.png"],
+      },
+    ]);
+  });
+
+  it("ignores late optimistic echoes when the real user message already exists", () => {
+    const remoteState = threadReducer(initialState, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      item: {
+        id: "user-remote-1",
+        kind: "message",
+        role: "user",
+        text: "Hello there",
+      },
+      hasCustomName: false,
+    });
+
+    const next = threadReducer(remoteState, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      item: {
+        id: "optimistic-user-1",
+        kind: "message",
+        role: "user",
+        text: "Hello there",
+      },
+      hasCustomName: false,
+    });
+
+    expect(next).toBe(remoteState);
+  });
+
   it("renames auto-generated thread from assistant output when no user message", () => {
     const threads: ThreadSummary[] = [
       { id: "thread-1", name: "New Agent", updatedAt: 1 },

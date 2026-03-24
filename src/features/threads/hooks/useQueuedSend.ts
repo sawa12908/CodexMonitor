@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { pushErrorToast } from "@/services/toasts";
 import type {
   AppMention,
   ComposerSendIntent,
@@ -41,6 +42,7 @@ type UseQueuedSendOptions = {
   startCompact: (text: string) => Promise<void>;
   startApps: (text: string) => Promise<void>;
   startMcp: (text: string) => Promise<void>;
+  createResearchRun?: (title: string) => Promise<unknown>;
   startStatus: (text: string) => Promise<void>;
   clearActiveImages: () => void;
 };
@@ -68,6 +70,7 @@ type SlashCommandKind =
   | "fork"
   | "mcp"
   | "new"
+  | "research"
   | "resume"
   | "review"
   | "status";
@@ -91,6 +94,9 @@ function parseSlashCommand(text: string, appsEnabled: boolean): SlashCommandKind
   if (/^\/new\b/i.test(text)) {
     return "new";
   }
+  if (/^\/research\s+start\b/i.test(text)) {
+    return "research";
+  }
   if (/^\/resume\b/i.test(text)) {
     return "resume";
   }
@@ -98,6 +104,14 @@ function parseSlashCommand(text: string, appsEnabled: boolean): SlashCommandKind
     return "status";
   }
   return null;
+}
+
+function createQueueFlushBarrierKey(
+  activeTurnId: string | null,
+  isProcessing: boolean,
+  isReviewing: boolean,
+): string {
+  return `${activeTurnId ?? ""}:${isProcessing ? "1" : "0"}:${isReviewing ? "1" : "0"}`;
 }
 
 export function useQueuedSend({
@@ -120,6 +134,7 @@ export function useQueuedSend({
   startCompact,
   startApps,
   startMcp,
+  createResearchRun,
   startStatus,
   clearActiveImages,
 }: UseQueuedSendOptions): UseQueuedSendResult {
@@ -132,11 +147,31 @@ export function useQueuedSend({
   const [hasStartedByThread, setHasStartedByThread] = useState<
     Record<string, boolean>
   >({});
+  const [flushBarrierByThread, setFlushBarrierByThread] = useState<
+    Record<string, string | null>
+  >({});
 
-  const activeQueue = useMemo(
-    () => (activeThreadId ? queuedByThread[activeThreadId] ?? [] : []),
-    [activeThreadId, queuedByThread],
-  );
+  const activeQueue = useMemo(() => {
+    if (!activeThreadId) {
+      return [];
+    }
+    const queued = queuedByThread[activeThreadId] ?? [];
+    const inFlight = inFlightByThread[activeThreadId] ?? null;
+    const hasStarted = hasStartedByThread[activeThreadId] ?? false;
+    if (!inFlight || hasStarted) {
+      return queued;
+    }
+    const visibleInFlight: QueuedMessage = {
+      ...inFlight,
+      state: "sending",
+    };
+    return [visibleInFlight, ...queued];
+  }, [
+    activeThreadId,
+    hasStartedByThread,
+    inFlightByThread,
+    queuedByThread,
+  ]);
 
   const enqueueMessage = useCallback((threadId: string, item: QueuedMessage) => {
     setQueuedByThread((prev) => ({
@@ -144,6 +179,37 @@ export function useQueuedSend({
       [threadId]: [...(prev[threadId] ?? []), item],
     }));
   }, []);
+
+  const clearInFlightMessage = useCallback((threadId: string) => {
+    setInFlightByThread((prev) => {
+      if (!prev[threadId]) {
+        return prev;
+      }
+      return { ...prev, [threadId]: null };
+    });
+    setHasStartedByThread((prev) => {
+      if (!prev[threadId]) {
+        return prev;
+      }
+      return { ...prev, [threadId]: false };
+    });
+  }, []);
+
+  const setFlushBarrier = useCallback((threadId: string, barrier: string | null) => {
+    setFlushBarrierByThread((prev) => {
+      if ((prev[threadId] ?? null) === barrier) {
+        return prev;
+      }
+      return { ...prev, [threadId]: barrier };
+    });
+  }, []);
+
+  const clearFlushBarrier = useCallback(
+    (threadId: string) => {
+      setFlushBarrier(threadId, null);
+    },
+    [setFlushBarrier],
+  );
 
   const removeQueuedMessage = useCallback(
     (threadId: string, messageId: string) => {
@@ -170,9 +236,32 @@ export function useQueuedSend({
       text,
       createdAt: Date.now(),
       images,
+      state: "queued",
       ...(appMentions.length > 0 ? { appMentions } : {}),
     }),
     [],
+  );
+
+  const restoreQueuedMessage = useCallback(
+    (
+      threadId: string,
+      item: QueuedMessage,
+      options?: { pauseFlushBarrier?: string | null },
+    ) => {
+      clearInFlightMessage(threadId);
+      if (options?.pauseFlushBarrier) {
+        setFlushBarrier(threadId, options.pauseFlushBarrier);
+      } else {
+        clearFlushBarrier(threadId);
+      }
+      prependQueuedMessage(threadId, { ...item, state: "queued" });
+    },
+    [
+      clearFlushBarrier,
+      clearInFlightMessage,
+      prependQueuedMessage,
+      setFlushBarrier,
+    ],
   );
 
   const runSlashCommand = useCallback(
@@ -201,6 +290,29 @@ export function useQueuedSend({
         await startMcp(trimmed);
         return;
       }
+      if (command === "research") {
+        const match = trimmed.match(/^\/research\s+start\b/i);
+        const title = trimmed.replace(/^\/research\s+start\b/i, "").trim();
+        if (!match) {
+          return;
+        }
+        if (!title) {
+          pushErrorToast({
+            title: "Research command incomplete",
+            message: "Use /research start <title> to create a tracked run.",
+          });
+          return;
+        }
+        if (!createResearchRun) {
+          pushErrorToast({
+            title: "Research runs unavailable",
+            message: "Research tracking has not been initialized for this workspace.",
+          });
+          return;
+        }
+        await createResearchRun(title);
+        return;
+      }
       if (command === "status") {
         await startStatus(trimmed);
         return;
@@ -222,6 +334,7 @@ export function useQueuedSend({
       startCompact,
       startApps,
       startMcp,
+      createResearchRun,
       startStatus,
       startThreadForWorkspace,
     ],
@@ -343,6 +456,32 @@ export function useQueuedSend({
     if (!activeThreadId) {
       return;
     }
+    const flushBarrier = flushBarrierByThread[activeThreadId] ?? null;
+    if (!flushBarrier) {
+      return;
+    }
+    const currentBarrier = createQueueFlushBarrierKey(
+      activeTurnId,
+      isProcessing,
+      isReviewing,
+    );
+    if (flushBarrier === currentBarrier) {
+      return;
+    }
+    clearFlushBarrier(activeThreadId);
+  }, [
+    activeThreadId,
+    activeTurnId,
+    clearFlushBarrier,
+    flushBarrierByThread,
+    isProcessing,
+    isReviewing,
+  ]);
+
+  useEffect(() => {
+    if (!activeThreadId) {
+      return;
+    }
     const inFlight = inFlightByThread[activeThreadId];
     if (!inFlight) {
       return;
@@ -357,11 +496,11 @@ export function useQueuedSend({
       return;
     }
     if (hasStartedByThread[activeThreadId]) {
-      setInFlightByThread((prev) => ({ ...prev, [activeThreadId]: null }));
-      setHasStartedByThread((prev) => ({ ...prev, [activeThreadId]: false }));
+      clearInFlightMessage(activeThreadId);
     }
   }, [
     activeThreadId,
+    clearInFlightMessage,
     hasStartedByThread,
     inFlightByThread,
     isProcessing,
@@ -373,6 +512,9 @@ export function useQueuedSend({
       return;
     }
     if (inFlightByThread[activeThreadId]) {
+      return;
+    }
+    if (flushBarrierByThread[activeThreadId]) {
       return;
     }
     const queue = queuedByThread[activeThreadId] ?? [];
@@ -393,29 +535,52 @@ export function useQueuedSend({
         const command = parseSlashCommand(trimmed, appsEnabled);
         if (command) {
           await runSlashCommand(command, trimmed);
+          if (command !== "review") {
+            setHasStartedByThread((prev) => ({
+              ...prev,
+              [threadId]: true,
+            }));
+          }
         } else {
           const queuedMentions = nextItem.appMentions ?? [];
-          if (queuedMentions.length > 0) {
-            await sendUserMessage(nextItem.text, nextItem.images ?? [], queuedMentions);
-          } else {
-            await sendUserMessage(nextItem.text, nextItem.images ?? []);
+          const sendResult =
+            queuedMentions.length > 0
+              ? await sendUserMessage(
+                nextItem.text,
+                nextItem.images ?? [],
+                queuedMentions,
+              )
+              : await sendUserMessage(nextItem.text, nextItem.images ?? []);
+          if (sendResult?.status === "blocked") {
+            restoreQueuedMessage(threadId, nextItem, {
+              pauseFlushBarrier: createQueueFlushBarrierKey(
+                activeTurnId,
+                isProcessing,
+                isReviewing,
+              ),
+            });
+            return;
+          }
+          if (sendResult?.status !== "sent") {
+            restoreQueuedMessage(threadId, nextItem);
+            return;
           }
         }
       } catch {
-        setInFlightByThread((prev) => ({ ...prev, [threadId]: null }));
-        setHasStartedByThread((prev) => ({ ...prev, [threadId]: false }));
-        prependQueuedMessage(threadId, nextItem);
+        restoreQueuedMessage(threadId, nextItem);
       }
     })();
   }, [
     activeThreadId,
     appsEnabled,
+    activeTurnId,
+    flushBarrierByThread,
     inFlightByThread,
     isProcessing,
     isReviewing,
     queueFlushPaused,
-    prependQueuedMessage,
     queuedByThread,
+    restoreQueuedMessage,
     runSlashCommand,
     sendUserMessage,
   ]);

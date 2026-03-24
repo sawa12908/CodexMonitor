@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GitFileStatus, WorkspaceInfo } from "../../../types";
-import { getGitStatus } from "../../../services/tauri";
+import { appendFrontendDiagnostic, getGitStatus } from "../../../services/tauri";
 
 type GitStatusState = {
   branchName: string;
@@ -28,6 +28,10 @@ export function useGitStatus(activeWorkspace: WorkspaceInfo | null) {
   const requestIdRef = useRef(0);
   const workspaceIdRef = useRef<string | null>(activeWorkspace?.id ?? null);
   const cachedStatusRef = useRef<Map<string, GitStatusState>>(new Map());
+  const inFlightRequestRef = useRef<{
+    workspaceId: string;
+    promise: Promise<void>;
+  } | null>(null);
   const workspaceId = activeWorkspace?.id ?? null;
 
   const resolveBranchName = useCallback(
@@ -47,16 +51,41 @@ export function useGitStatus(activeWorkspace: WorkspaceInfo | null) {
   const refresh = useCallback(() => {
     if (!workspaceId) {
       setStatus(emptyStatus);
-      return;
+      return Promise.resolve();
+    }
+    const inFlightRequest = inFlightRequestRef.current;
+    if (inFlightRequest && inFlightRequest.workspaceId === workspaceId) {
+      void appendFrontendDiagnostic(
+        "frontend.useGitStatus",
+        "refresh_skipped_inflight",
+        {
+          workspaceId,
+          requestId: requestIdRef.current,
+        },
+      );
+      return inFlightRequest.promise;
     }
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    return getGitStatus(workspaceId)
+    const startedAt = performance.now();
+    const promise = getGitStatus(workspaceId)
       .then((data) => {
-        if (
+        const durationMs = Math.round(performance.now() - startedAt);
+        const isStale =
           requestIdRef.current !== requestId ||
-          workspaceIdRef.current !== workspaceId
-        ) {
+          workspaceIdRef.current !== workspaceId;
+        void appendFrontendDiagnostic("frontend.useGitStatus", "refresh_done", {
+          workspaceId,
+          requestId,
+          durationMs,
+          stale: isStale,
+          fileCount: data.files.length,
+          stagedFileCount: data.stagedFiles.length,
+          unstagedFileCount: data.unstagedFiles.length,
+          totalAdditions: data.totalAdditions,
+          totalDeletions: data.totalDeletions,
+        });
+        if (isStale) {
           return;
         }
         const cached = cachedStatusRef.current.get(workspaceId);
@@ -71,19 +100,34 @@ export function useGitStatus(activeWorkspace: WorkspaceInfo | null) {
       })
       .catch((err) => {
         console.error("Failed to load git status", err);
-        if (
+        const durationMs = Math.round(performance.now() - startedAt);
+        const message = err instanceof Error ? err.message : String(err);
+        const isStale =
           requestIdRef.current !== requestId ||
-          workspaceIdRef.current !== workspaceId
-        ) {
+          workspaceIdRef.current !== workspaceId;
+        void appendFrontendDiagnostic("frontend.useGitStatus", "refresh_error", {
+          workspaceId,
+          requestId,
+          durationMs,
+          stale: isStale,
+          error: message,
+        });
+        if (isStale) {
           return;
         }
-        const message = err instanceof Error ? err.message : String(err);
         const cached = cachedStatusRef.current.get(workspaceId);
         const nextStatus = cached
           ? { ...cached, error: message }
           : { ...emptyStatus, branchName: "unknown", error: message };
         setStatus(nextStatus);
+      })
+      .finally(() => {
+        if (inFlightRequestRef.current?.promise === promise) {
+          inFlightRequestRef.current = null;
+        }
       });
+    inFlightRequestRef.current = { workspaceId, promise };
+    return promise;
   }, [resolveBranchName, workspaceId]);
 
   useEffect(() => {

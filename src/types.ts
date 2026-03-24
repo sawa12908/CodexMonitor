@@ -604,6 +604,62 @@ export type QueuedMessage = {
   createdAt: number;
   images?: string[];
   appMentions?: AppMention[];
+  state?: "queued" | "sending";
+};
+
+export type ResearchRunStatus = "created" | "running" | "completed" | "failed";
+
+export type ResearchDeliveryStatus =
+  | "idle"
+  | "queued"
+  | "sending"
+  | "sent"
+  | "failed";
+
+export type ResearchMetricValue =
+  | string
+  | number
+  | boolean
+  | null
+  | string[]
+  | number[];
+
+export type ResearchRunLogEntry = {
+  id: string;
+  at: number;
+  kind: "progress" | "completed" | "failed";
+  stageLabel: string;
+  message: string;
+  progressPct: number;
+};
+
+export type ResearchRun = {
+  id: string;
+  workspaceId: string;
+  boundThreadId: string;
+  title: string;
+  roundNumber: number | null;
+  status: ResearchRunStatus;
+  progressPct: number;
+  stageLabel: string;
+  latestMessage: string;
+  metrics: Record<string, ResearchMetricValue>;
+  primaryResultPath: string | null;
+  resultPaths: string[];
+  resultSummary: string | null;
+  resultPreview: string | null;
+  deliveryStatus: ResearchDeliveryStatus;
+  deliveryError: string | null;
+  createdAt: number;
+  updatedAt: number;
+  completedAt: number | null;
+  dismissed: boolean;
+  logs: ResearchRunLogEntry[];
+};
+
+export type ResearchApiConfig = {
+  baseUrl: string | null;
+  authToken: string;
 };
 
 export type AppMention = {

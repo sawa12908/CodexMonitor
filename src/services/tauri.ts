@@ -8,6 +8,9 @@ import type {
   DictationModelStatus,
   DictationSessionState,
   LocalUsageSnapshot,
+  ResearchApiConfig,
+  ResearchDeliveryStatus,
+  ResearchRun,
   TcpDaemonStatus,
   TailscaleDaemonCommandPreview,
   TailscaleStatus,
@@ -105,6 +108,26 @@ export async function listWorkspaces(): Promise<WorkspaceInfo[]> {
 
 export async function getCodexConfigPath(): Promise<string> {
   return invoke<string>("get_codex_config_path");
+}
+
+export async function appendFrontendDiagnostic(
+  source: string,
+  label: string,
+  payload?: Record<string, unknown> | null,
+): Promise<void> {
+  try {
+    await invoke("append_frontend_diagnostic", {
+      source,
+      label,
+      payload: payload ?? null,
+    });
+  } catch {
+    // Diagnostics are best-effort; avoid surfacing extra noise if logging fails.
+  }
+}
+
+export async function getDiagnosticLogPath(): Promise<string> {
+  return invoke<string>("get_diagnostic_log_path");
 }
 
 export type TextFileResponse = {
@@ -1091,6 +1114,42 @@ export async function setThreadName(
   name: string,
 ) {
   return invoke<any>("set_thread_name", { workspaceId, threadId, name });
+}
+
+export async function getResearchApiConfig(): Promise<ResearchApiConfig> {
+  return invoke<ResearchApiConfig>("get_research_api_config");
+}
+
+export async function listResearchRuns(workspaceId: string): Promise<ResearchRun[]> {
+  return invoke<ResearchRun[]>("list_research_runs", { workspaceId });
+}
+
+export async function createResearchRun(
+  workspaceId: string,
+  threadId: string,
+  title: string,
+): Promise<ResearchRun> {
+  return invoke<ResearchRun>("create_research_run", { workspaceId, threadId, title });
+}
+
+export async function retryResearchDelivery(runId: string): Promise<ResearchRun> {
+  return invoke<ResearchRun>("retry_research_delivery", { runId });
+}
+
+export async function dismissResearchRun(runId: string): Promise<ResearchRun> {
+  return invoke<ResearchRun>("dismiss_research_run", { runId });
+}
+
+export async function setResearchRunDeliveryStatus(
+  runId: string,
+  deliveryStatus: ResearchDeliveryStatus,
+  errorMessage?: string | null,
+): Promise<ResearchRun> {
+  return invoke<ResearchRun>("set_research_run_delivery_status", {
+    runId,
+    deliveryStatus,
+    errorMessage,
+  });
 }
 
 export async function generateCommitMessage(

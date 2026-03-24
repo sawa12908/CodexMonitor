@@ -2,6 +2,7 @@ import { FileTreePanel } from "../../../files/components/FileTreePanel";
 import { GitDiffPanel } from "../../../git/components/GitDiffPanel";
 import { GitDiffViewer } from "../../../git/components/GitDiffViewer";
 import { PromptPanel } from "../../../prompts/components/PromptPanel";
+import { ResearchPanel } from "../../../research/components/ResearchPanel";
 import type { LayoutNodesOptions, LayoutNodesResult } from "./types";
 
 type GitLayoutNodes = Pick<LayoutNodesResult, "gitDiffPanelNode" | "gitDiffViewerNode">;
@@ -66,6 +67,23 @@ export function buildGitNodes(options: LayoutNodesOptions): GitLayoutNodes {
         onRevealWorkspacePrompts={options.onRevealWorkspacePrompts}
         onRevealGeneralPrompts={options.onRevealGeneralPrompts}
         canRevealGeneralPrompts={options.canRevealGeneralPrompts}
+      />
+    );
+  } else if (options.filePanelMode === "research") {
+    gitDiffPanelNode = (
+      <ResearchPanel
+        filePanelMode={options.filePanelMode}
+        onFilePanelModeChange={options.onFilePanelModeChange}
+        runs={options.researchRuns}
+        selectedRun={options.activeResearchRun}
+        apiConfig={options.researchApiConfig}
+        deliveryPrompt={options.researchDeliveryPrompt}
+        showDeliveryPrompt={options.showDetachedResearchDeliveryPrompt}
+        onSelectRun={options.onSelectResearchRun}
+        onDeliveryPromptChange={options.onResearchDeliveryPromptChange}
+        onRetryDelivery={options.onRetryResearchDelivery}
+        onDismissRun={options.onDismissResearchRun}
+        onOpenThread={options.onOpenResearchThread}
       />
     );
   } else {

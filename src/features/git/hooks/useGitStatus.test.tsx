@@ -2,11 +2,12 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
-import { getGitStatus } from "../../../services/tauri";
+import { appendFrontendDiagnostic, getGitStatus } from "../../../services/tauri";
 import { useGitStatus } from "./useGitStatus";
 
 vi.mock("../../../services/tauri", () => ({
   getGitStatus: vi.fn(),
+  appendFrontendDiagnostic: vi.fn(),
 }));
 
 const workspace: WorkspaceInfo = {
@@ -42,6 +43,10 @@ describe("useGitStatus", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+  });
+
+  beforeEach(() => {
+    vi.mocked(appendFrontendDiagnostic).mockResolvedValue(undefined);
   });
 
   it("polls on interval and updates status", async () => {
@@ -179,6 +184,42 @@ describe("useGitStatus", () => {
 
     expect(result.current.status.branchName).toBe("main");
     expect(result.current.status.error).toBe("boom");
+
+    unmount();
+  });
+
+  it("reuses the in-flight request for overlapping refreshes", async () => {
+    const getGitStatusMock = vi.mocked(getGitStatus);
+    let resolveStatus: (value: ReturnType<typeof makeStatus>) => void;
+    const pendingStatus = new Promise<ReturnType<typeof makeStatus>>((resolve) => {
+      resolveStatus = resolve;
+    });
+    getGitStatusMock.mockReturnValue(pendingStatus);
+
+    const { result, unmount } = renderHook(
+      ({ active }: { active: WorkspaceInfo | null }) => useGitStatus(active),
+      { initialProps: { active: workspace } },
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(getGitStatusMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+      await Promise.resolve();
+    });
+
+    expect(getGitStatusMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveStatus(makeStatus("main", 2, 1));
+      await pendingStatus;
+    });
+
+    expect(result.current.status.branchName).toBe("main");
 
     unmount();
   });

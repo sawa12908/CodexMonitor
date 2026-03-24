@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DebugEntry, WorkspaceInfo } from "../../../types";
-import { getWorkspaceFiles } from "../../../services/tauri";
+import {
+  appendFrontendDiagnostic,
+  getWorkspaceFiles,
+} from "../../../services/tauri";
 
 type UseWorkspaceFilesOptions = {
   activeWorkspace: WorkspaceInfo | null;
@@ -55,6 +58,7 @@ export function useWorkspaceFiles({
     }
     inFlight.current = workspaceId;
     const requestWorkspaceId = workspaceId;
+    const startedAt = performance.now();
     setIsLoading(true);
     onDebug?.({
       id: `${Date.now()}-client-files-list`,
@@ -65,6 +69,7 @@ export function useWorkspaceFiles({
     });
     try {
       const response = await getWorkspaceFiles(requestWorkspaceId);
+      const durationMs = Math.round(performance.now() - startedAt);
       onDebug?.({
         id: `${Date.now()}-server-files-list`,
         timestamp: Date.now(),
@@ -72,18 +77,34 @@ export function useWorkspaceFiles({
         label: "files/list response",
         payload: response,
       });
-      if (requestWorkspaceId === workspaceId) {
-        const nextFiles = Array.isArray(response) ? response : [];
+      const nextFiles = Array.isArray(response) ? response : [];
+      const isStale = requestWorkspaceId !== workspaceId;
+      void appendFrontendDiagnostic("frontend.useWorkspaceFiles", "refresh_done", {
+        workspaceId: requestWorkspaceId,
+        durationMs,
+        stale: isStale,
+        fileCount: nextFiles.length,
+        pollingEnabled: isPollingEnabled,
+      });
+      if (!isStale) {
         setFiles((prev) => (areStringArraysEqual(prev, nextFiles) ? prev : nextFiles));
         lastFetchedWorkspaceId.current = requestWorkspaceId;
       }
     } catch (error) {
+      const durationMs = Math.round(performance.now() - startedAt);
+      const message = error instanceof Error ? error.message : String(error);
       onDebug?.({
         id: `${Date.now()}-client-files-list-error`,
         timestamp: Date.now(),
         source: "error",
         label: "files/list error",
-        payload: error instanceof Error ? error.message : String(error),
+        payload: message,
+      });
+      void appendFrontendDiagnostic("frontend.useWorkspaceFiles", "refresh_error", {
+        workspaceId: requestWorkspaceId,
+        durationMs,
+        pollingEnabled: isPollingEnabled,
+        error: message,
       });
     } finally {
       if (inFlight.current === requestWorkspaceId) {
@@ -91,7 +112,7 @@ export function useWorkspaceFiles({
         setIsLoading(false);
       }
     }
-  }, [isConnected, isEnabled, onDebug, workspaceId]);
+  }, [isConnected, isEnabled, isPollingEnabled, onDebug, workspaceId]);
 
   useEffect(() => {
     setFiles([]);

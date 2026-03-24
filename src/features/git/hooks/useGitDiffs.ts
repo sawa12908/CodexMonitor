@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getGitDiffs } from "../../../services/tauri";
+import { appendFrontendDiagnostic, getGitDiffs } from "../../../services/tauri";
 import type { GitFileDiff, GitFileStatus, WorkspaceInfo } from "../../../types";
 
 type GitDiffState = {
@@ -46,29 +46,51 @@ export function useGitDiffs(
     const cacheKey = `${workspaceId}|ignoreWhitespaceChanges:${ignoreWhitespaceChanges ? "1" : "0"}`;
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
+    const startedAt = performance.now();
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
       const diffs = await getGitDiffs(workspaceId);
-      if (
+      const durationMs = Math.round(performance.now() - startedAt);
+      const isStale =
         requestIdRef.current !== requestId ||
-        cacheKeyRef.current !== cacheKey
-      ) {
+        cacheKeyRef.current !== cacheKey;
+      void appendFrontendDiagnostic("frontend.useGitDiffs", "refresh_done", {
+        workspaceId,
+        requestId,
+        durationMs,
+        stale: isStale,
+        trackedFileCount: files.length,
+        diffCount: diffs.length,
+        ignoreWhitespaceChanges,
+      });
+      if (isStale) {
         return;
       }
       setState({ diffs, isLoading: false, error: null });
       cachedDiffsRef.current.set(cacheKey, diffs);
     } catch (error) {
       console.error("Failed to load git diffs", error);
-      if (
+      const durationMs = Math.round(performance.now() - startedAt);
+      const message = error instanceof Error ? error.message : String(error);
+      const isStale =
         requestIdRef.current !== requestId ||
-        cacheKeyRef.current !== cacheKey
-      ) {
+        cacheKeyRef.current !== cacheKey;
+      void appendFrontendDiagnostic("frontend.useGitDiffs", "refresh_error", {
+        workspaceId,
+        requestId,
+        durationMs,
+        stale: isStale,
+        trackedFileCount: files.length,
+        ignoreWhitespaceChanges,
+        error: message,
+      });
+      if (isStale) {
         return;
       }
       setState({
         diffs: [],
         isLoading: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       });
     }
   }, [activeWorkspace, ignoreWhitespaceChanges]);

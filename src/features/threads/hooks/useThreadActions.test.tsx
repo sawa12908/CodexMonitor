@@ -350,7 +350,7 @@ describe("useThreadActions", () => {
     expect(onSubagentThreadDetected).toHaveBeenCalledWith("ws-1", "child-thread");
   });
 
-  it("does not hydrate status from resume when local items are preserved", async () => {
+  it("hydrates status from resume while preserving local items", async () => {
     const localItem: ConversationItem = {
       id: "local-assistant-1",
       kind: "message",
@@ -378,18 +378,18 @@ describe("useThreadActions", () => {
       await result.current.resumeThreadForWorkspace("ws-1", "thread-1", true);
     });
 
-    expect(dispatch).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "markProcessing",
-        threadId: "thread-1",
-      }),
-    );
-    expect(dispatch).not.toHaveBeenCalledWith({
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "markProcessing",
+      threadId: "thread-1",
+      isProcessing: true,
+      timestamp: expect.any(Number),
+    });
+    expect(dispatch).toHaveBeenCalledWith({
       type: "setActiveTurnId",
       threadId: "thread-1",
       turnId: "turn-stale",
     });
-    expect(dispatch).not.toHaveBeenCalledWith({
+    expect(dispatch).toHaveBeenCalledWith({
       type: "markReviewing",
       threadId: "thread-1",
       isReviewing: true,

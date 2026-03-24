@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 const SIDEBAR_COLLAPSED_KEY = "codexmonitor.sidebarCollapsed";
 const RIGHT_PANEL_COLLAPSED_KEY = "codexmonitor.rightPanelCollapsed";
+const RESEARCH_PANEL_COLLAPSED_KEY = "codexmonitor.researchPanelCollapsed";
 
 type UseSidebarTogglesOptions = {
   isCompact: boolean;
@@ -21,6 +22,9 @@ export function useSidebarToggles({ isCompact }: UseSidebarTogglesOptions) {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(() =>
     readStoredBool(RIGHT_PANEL_COLLAPSED_KEY),
   );
+  const [researchPanelCollapsed, setResearchPanelCollapsed] = useState(() =>
+    readStoredBool(RESEARCH_PANEL_COLLAPSED_KEY),
+  );
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -35,6 +39,13 @@ export function useSidebarToggles({ isCompact }: UseSidebarTogglesOptions) {
       String(rightPanelCollapsed),
     );
   }, [rightPanelCollapsed]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      RESEARCH_PANEL_COLLAPSED_KEY,
+      String(researchPanelCollapsed),
+    );
+  }, [researchPanelCollapsed]);
 
   const collapseSidebar = () => {
     if (!isCompact) {
@@ -60,12 +71,27 @@ export function useSidebarToggles({ isCompact }: UseSidebarTogglesOptions) {
     }
   };
 
+  const collapseResearchPanel = () => {
+    if (!isCompact) {
+      setResearchPanelCollapsed(true);
+    }
+  };
+
+  const expandResearchPanel = () => {
+    if (!isCompact) {
+      setResearchPanelCollapsed(false);
+    }
+  };
+
   return {
     sidebarCollapsed,
     rightPanelCollapsed,
+    researchPanelCollapsed,
     collapseSidebar,
     expandSidebar,
     collapseRightPanel,
     expandRightPanel,
+    collapseResearchPanel,
+    expandResearchPanel,
   };
 }

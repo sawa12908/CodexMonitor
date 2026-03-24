@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { WorkspaceInfo } from "@/types";
+import type { SendMessageResult, WorkspaceInfo } from "@/types";
 import { useQueuedSend } from "./useQueuedSend";
 
 const workspace: WorkspaceInfo = {
@@ -33,6 +33,7 @@ const makeOptions = (
   startCompact: vi.fn().mockResolvedValue(undefined),
   startApps: vi.fn().mockResolvedValue(undefined),
   startMcp: vi.fn().mockResolvedValue(undefined),
+  createResearchRun: vi.fn().mockResolvedValue({ id: "research-1" }),
   startStatus: vi.fn().mockResolvedValue(undefined),
   clearActiveImages: vi.fn(),
   ...overrides,
@@ -92,6 +93,99 @@ describe("useQueuedSend", () => {
 
     expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
     expect(options.sendUserMessage).toHaveBeenCalledWith("Alpha", []);
+  });
+
+  it("keeps the flushing message visible until the send actually starts", async () => {
+    let resolveSend: ((value: SendMessageResult) => void) | null = null;
+    const options = makeOptions({
+      sendUserMessage: vi.fn(
+        () =>
+          new Promise<SendMessageResult>((resolve) => {
+            resolveSend = resolve;
+          }),
+      ),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("Visible while sending");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.activeQueue).toHaveLength(1);
+    expect(result.current.activeQueue[0]?.text).toBe("Visible while sending");
+    expect(result.current.activeQueue[0]?.state).toBe("sending");
+
+    await act(async () => {
+      resolveSend?.({ status: "sent" });
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("requeues the flushing message when send returns blocked", async () => {
+    const options = makeOptions({
+      sendUserMessage: vi.fn().mockResolvedValue({ status: "blocked" }),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("Retry after blocked");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(result.current.activeQueue).toHaveLength(1);
+    expect(result.current.activeQueue[0]?.text).toBe("Retry after blocked");
+    expect(result.current.activeQueue[0]?.state).toBe("queued");
+  });
+
+  it("retries a blocked queued message after thread state changes", async () => {
+    const sendUserMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ status: "blocked" })
+      .mockResolvedValueOnce({ status: "sent" });
+    const options = makeOptions({ sendUserMessage });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("Retry after barrier clears");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(result.current.activeQueue).toHaveLength(1);
+    expect(result.current.activeQueue[0]?.state).toBe("queued");
+
+    await act(async () => {
+      rerender({ ...options, isProcessing: true, sendUserMessage });
+    });
+    await act(async () => {
+      rerender({ ...options, isProcessing: false, sendUserMessage });
+      await Promise.resolve();
+    });
+
+    expect(sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(sendUserMessage).toHaveBeenLastCalledWith(
+      "Retry after barrier clears",
+      [],
+    );
   });
 
   it("queues send while processing when steer is disabled", async () => {
@@ -378,6 +472,22 @@ describe("useQueuedSend", () => {
     expect(options.startReview).not.toHaveBeenCalled();
   });
 
+  it("routes /research start to the local research handler", async () => {
+    const createResearchRun = vi.fn().mockResolvedValue({ id: "research-42" });
+    const options = makeOptions({ createResearchRun });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/research start ETF threshold round", ["img-1"]);
+    });
+
+    expect(createResearchRun).toHaveBeenCalledWith("ETF threshold round");
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.startReview).not.toHaveBeenCalled();
+  });
+
   it("routes /mcp to the MCP handler", async () => {
     const startMcp = vi.fn().mockResolvedValue(undefined);
     const options = makeOptions({ startMcp });
@@ -406,6 +516,22 @@ describe("useQueuedSend", () => {
     });
 
     expect(startApps).toHaveBeenCalledWith("/apps now");
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.startReview).not.toHaveBeenCalled();
+  });
+
+  it("routes /research start to the research run creator", async () => {
+    const createResearchRun = vi.fn().mockResolvedValue(undefined);
+    const options = makeOptions({ createResearchRun });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/research start ETF factor sweep", ["img-1"]);
+    });
+
+    expect(createResearchRun).toHaveBeenCalledWith("ETF factor sweep");
     expect(options.sendUserMessage).not.toHaveBeenCalled();
     expect(options.startReview).not.toHaveBeenCalled();
   });

@@ -7,6 +7,10 @@ type WorkspaceRestoreOptions = {
   workspaces: WorkspaceInfo[];
   hasLoaded: boolean;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
+  updateWorkspaceSettings: (
+    workspaceId: string,
+    settings: Partial<WorkspaceInfo["settings"]>,
+  ) => Promise<WorkspaceInfo>;
   listThreadsForWorkspaces: (
     workspaces: WorkspaceInfo[],
     options?: { preserveState?: boolean; maxPages?: number },
@@ -17,13 +21,24 @@ export function useWorkspaceRestore({
   workspaces,
   hasLoaded,
   connectWorkspace,
+  updateWorkspaceSettings,
   listThreadsForWorkspaces,
 }: WorkspaceRestoreOptions) {
   const restoredWorkspaces = useRef(new Set<string>());
+  const singletonWorkspaceHandled = useRef(false);
 
   useEffect(() => {
     if (!hasLoaded) {
       return;
+    }
+    const singletonWorkspace = workspaces.length === 1 ? workspaces[0] : null;
+    if (singletonWorkspace && !singletonWorkspaceHandled.current) {
+      singletonWorkspaceHandled.current = true;
+      if (singletonWorkspace.settings.sidebarCollapsed) {
+        void updateWorkspaceSettings(singletonWorkspace.id, {
+          sidebarCollapsed: false,
+        });
+      }
     }
     const pending = workspaces.filter(
       (workspace) => !restoredWorkspaces.current.has(workspace.id),
@@ -53,5 +68,5 @@ export function useWorkspaceRestore({
         });
       }
     })();
-  }, [connectWorkspace, hasLoaded, listThreadsForWorkspaces, workspaces]);
+  }, [connectWorkspace, hasLoaded, listThreadsForWorkspaces, updateWorkspaceSettings, workspaces]);
 }

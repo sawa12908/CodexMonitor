@@ -288,10 +288,7 @@ export function useThreadActions({
           if (shouldReplace) {
             replaceOnResumeRef.current[threadId] = false;
           }
-          if (localItems.length > 0 && !shouldReplace) {
-            loadedThreadsRef.current[threadId] = true;
-            return threadId;
-          }
+          const preserveLocalItems = localItems.length > 0 && !shouldReplace;
           const resumedTurnState = getResumedTurnState(thread);
           const localStatus = threadStatusByIdRef.current[threadId];
           const localActiveTurnId =
@@ -332,18 +329,20 @@ export function useThreadActions({
             isReviewing: isReviewingFromThread(thread),
           });
           const hasOverlap =
+            !preserveLocalItems &&
             items.length > 0 &&
             localItems.length > 0 &&
             items.some((item) => localItems.some((local) => local.id === item.id));
-          const mergedItems =
-            items.length > 0
+          const mergedItems = preserveLocalItems
+            ? localItems
+            : items.length > 0
               ? shouldReplace
                 ? items
                 : localItems.length > 0 && !hasOverlap
                   ? localItems
                   : mergeThreadItems(items, localItems)
               : localItems;
-          if (mergedItems.length > 0) {
+          if (mergedItems.length > 0 && !preserveLocalItems) {
             dispatch({ type: "setThreadItems", threadId, items: mergedItems });
           }
           const preview = asString(thread?.preview ?? "");
@@ -482,6 +481,16 @@ export function useThreadActions({
       return resumeThreadForWorkspace(workspaceId, threadId, true, true);
     },
     [replaceOnResumeRef, resumeThreadForWorkspace],
+  );
+
+  const reconcileThread = useCallback(
+    async (workspaceId: string, threadId: string) => {
+      if (!threadId) {
+        return null;
+      }
+      return resumeThreadForWorkspace(workspaceId, threadId, true, false);
+    },
+    [resumeThreadForWorkspace],
   );
 
   const resetWorkspaceThreads = useCallback(
@@ -1028,6 +1037,7 @@ export function useThreadActions({
     forkThreadForWorkspace,
     resumeThreadForWorkspace,
     refreshThread,
+    reconcileThread,
     resetWorkspaceThreads,
     listThreadsForWorkspaces,
     listThreadsForWorkspace,

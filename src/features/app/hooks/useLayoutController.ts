@@ -42,10 +42,13 @@ export function useLayoutController({
   const {
     sidebarCollapsed,
     rightPanelCollapsed,
+    researchPanelCollapsed,
     collapseSidebar,
     expandSidebar,
     collapseRightPanel,
     expandRightPanel,
+    collapseResearchPanel,
+    expandResearchPanel,
   } = useSidebarToggles({ isCompact });
 
   const {
@@ -89,10 +92,13 @@ export function useLayoutController({
     onDebugPanelResizeStart,
     sidebarCollapsed,
     rightPanelCollapsed,
+    researchPanelCollapsed,
     collapseSidebar,
     expandSidebar,
     collapseRightPanel,
     expandRightPanel,
+    collapseResearchPanel,
+    expandResearchPanel,
     terminalOpen,
     handleDebugClick,
     handleToggleTerminal,

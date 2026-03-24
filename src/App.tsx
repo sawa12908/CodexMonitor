@@ -9,6 +9,7 @@ import "./styles/ds-diff.css";
 import "./styles/ds-popover.css";
 import "./styles/buttons.css";
 import "./styles/sidebar.css";
+import "./styles/research.css";
 import "./styles/home.css";
 import "./styles/workspace-home.css";
 import "./styles/main.css";
@@ -123,6 +124,8 @@ import { useWorkspaceHome } from "@/features/workspaces/hooks/useWorkspaceHome";
 import { useWorkspaceAgentMd } from "@/features/workspaces/hooks/useWorkspaceAgentMd";
 import { usePlugins } from "@/features/plugins/hooks/usePlugins";
 import { usePluginRuntime } from "@/features/plugins/hooks/usePluginRuntime";
+import { ResearchRunsPanel } from "@/features/research/components/ResearchRunsPanel";
+import { useResearchRuns } from "@/features/research/hooks/useResearchRuns";
 import type {
   ComposerEditorSettings,
   WorkspaceInfo,
@@ -336,10 +339,13 @@ function MainApp() {
     isPhone,
     sidebarCollapsed,
     rightPanelCollapsed,
+    researchPanelCollapsed,
     collapseSidebar,
     expandSidebar,
     collapseRightPanel,
     expandRightPanel,
+    collapseResearchPanel,
+    expandResearchPanel,
     terminalOpen,
     handleDebugClick,
     handleToggleTerminal,
@@ -352,14 +358,17 @@ function MainApp() {
     toggleDebugPanelShortcut: appSettings.toggleDebugPanelShortcut,
     toggleTerminalShortcut: appSettings.toggleTerminalShortcut,
   });
-  const sidebarToggleProps = {
+  const sidebarToggleBase = {
     isCompact,
     sidebarCollapsed,
     rightPanelCollapsed,
+    researchPanelCollapsed,
     onCollapseSidebar: collapseSidebar,
     onExpandSidebar: expandSidebar,
     onCollapseRightPanel: collapseRightPanel,
     onExpandRightPanel: expandRightPanel,
+    onCollapseResearchPanel: collapseResearchPanel,
+    onExpandResearchPanel: expandResearchPanel,
   };
   const {
     settingsOpen,
@@ -839,6 +848,36 @@ function MainApp() {
     prDiffsLoading: gitPullRequestDiffsLoading,
     prDiffsError: gitPullRequestDiffsError,
   });
+  const showResearchPanel = useCallback(() => {
+    setFilePanelMode("research");
+    if (isCompact) {
+      setActiveTab("git");
+    }
+  }, [isCompact, setActiveTab, setFilePanelMode]);
+  const {
+    apiConfig: researchApiConfig,
+    activeWorkspaceRuns: activeWorkspaceResearchRuns,
+    activeResearchRun,
+    activeDeliveryPrompt: activeResearchDeliveryPrompt,
+    selectResearchRun,
+    createResearchRun,
+    retryResearchDelivery,
+    dismissResearchRun,
+    setDeliveryPrompt: setResearchDeliveryPrompt,
+  } = useResearchRuns({
+    activeWorkspace,
+    activeThreadId,
+    workspacesById,
+    threadStatusById,
+    connectWorkspace,
+    sendUserMessageToThread,
+    onShowResearchPanel: showResearchPanel,
+  });
+  const hasResearchPanel = Boolean(activeWorkspace);
+  const sidebarToggleProps = {
+    ...sidebarToggleBase,
+    hasResearchPanel,
+  };
   queueGitStatusRefreshRef.current = queueGitStatusRefresh;
 
   const shouldLoadGitHubPanelData =
@@ -1358,6 +1397,7 @@ function MainApp() {
   });
 
   const showHome = !activeWorkspace;
+  const showResearchPanelColumn = Boolean(activeWorkspace) && hasResearchPanel;
   const {
     latestAgentRuns,
     isLoadingLatestAgents,
@@ -1502,6 +1542,7 @@ function MainApp() {
     startCompact,
     startApps,
     startMcp,
+    createResearchRun,
     startStatus,
   });
 
@@ -1769,6 +1810,7 @@ function MainApp() {
     workspaces,
     hasLoaded,
     connectWorkspace,
+    updateWorkspaceSettings,
     listThreadsForWorkspaces,
   });
   useWorkspaceRefreshOnFocus({
@@ -1928,6 +1970,27 @@ function MainApp() {
     setSelectedCollaborationModeId,
     persistThreadCodexParams,
   });
+  const handleOpenResearchThread = useCallback(
+    (run: { workspaceId: string; boundThreadId: string }) => {
+      setCenterMode("chat");
+      setSelectedDiffPath(null);
+      resetPullRequestSelection();
+      selectWorkspace(run.workspaceId);
+      setActiveThreadId(run.boundThreadId, run.workspaceId);
+      if (isCompact) {
+        setActiveTab("codex");
+      }
+    },
+    [
+      isCompact,
+      resetPullRequestSelection,
+      selectWorkspace,
+      setActiveTab,
+      setActiveThreadId,
+      setCenterMode,
+      setSelectedDiffPath,
+    ],
+  );
 
   const { handleMoveWorkspace } = useWorkspaceOrderingOrchestration({
     workspaces,
@@ -1948,6 +2011,8 @@ function MainApp() {
     isTablet,
     sidebarCollapsed,
     rightPanelCollapsed,
+    researchPanelCollapsed,
+    hasResearchPanel: showResearchPanelColumn,
     shouldReduceTransparency,
     isWorkspaceDropActive,
     centerMode,
@@ -2141,6 +2206,20 @@ function MainApp() {
     onRefreshAllThreads: handleRefreshAllWorkspaceThreads,
     activeWorkspaceId,
     activeThreadId,
+    showDetachedResearchDeliveryPrompt: isCompact,
+    researchRuns: activeWorkspaceResearchRuns,
+    activeResearchRun,
+    researchApiConfig,
+    researchDeliveryPrompt: activeResearchDeliveryPrompt,
+    onSelectResearchRun: selectResearchRun,
+    onResearchDeliveryPromptChange: setResearchDeliveryPrompt,
+    onRetryResearchDelivery: (runId) => {
+      void retryResearchDelivery(runId);
+    },
+    onDismissResearchRun: (runId) => {
+      void dismissResearchRun(runId);
+    },
+    onOpenResearchThread: handleOpenResearchThread,
     activeItems,
     showPollingFetchStatus: showMobilePollingFetchStatus,
     pollingIntervalMs: REMOTE_THREAD_POLL_INTERVAL_MS,
@@ -2272,6 +2351,7 @@ function MainApp() {
           gitDiffViewStyle={gitDiffViewStyle}
           onSelectDiffViewStyle={setGitDiffViewStyle}
           isCompact={isCompact}
+          researchPanelCollapsed={researchPanelCollapsed}
           rightPanelCollapsed={rightPanelCollapsed}
           sidebarToggleProps={sidebarToggleProps}
         />
@@ -2631,6 +2711,16 @@ function MainApp() {
   ) : null;
 
   const mainMessagesNode = showWorkspaceHome ? workspaceHomeNode : messagesNode;
+  const researchPanelNode =
+    showResearchPanelColumn ? (
+      <ResearchRunsPanel
+        runs={activeWorkspaceResearchRuns}
+        deliveryPrompt={activeResearchDeliveryPrompt}
+        selectedRunId={activeResearchRun?.id ?? null}
+        onDeliveryPromptChange={setResearchDeliveryPrompt}
+        onSelectRun={selectResearchRun}
+      />
+    ) : null;
   const showThreadConnectionIndicator =
     Boolean(activeWorkspace) && appSettings.backendMode === "remote";
   const compactThreadConnectionState: "live" | "polling" | "disconnected" =
@@ -2704,6 +2794,7 @@ function MainApp() {
         hasActivePlan={hasActivePlan}
         activeWorkspace={Boolean(activeWorkspace)}
         sidebarNode={sidebarNode}
+        leftPanelNode={researchPanelNode}
         messagesNode={mainMessagesNode}
         composerNode={composerNode}
         approvalToastsNode={approvalToastsNode}
